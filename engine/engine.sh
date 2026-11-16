@@ -21,6 +21,7 @@
 #   ~/.local/state/@name@/history.jsonl  une ligne par exécution terminée
 #   ~/.local/state/@name@/pending.json   ce qui attend d'être installé
 #   ~/.local/state/@name@/runs/*.log     journal de chaque exécution
+#   ~/.local/state/@name@/build-status.json  avancement de la construction en cours
 #   /run/@name@/status.json              avancement de la préparation (Nix)
 #   /run/@name@/flatpak                  running, done ou failed
 #   /var/lib/@name@/prebuild.json        résultat de la dernière préparation
@@ -176,6 +177,20 @@ patched_package() { # nom, attribut de pkgs, patch, témoin (relatifs au flake)
   fi
 }
 
+# nix build avec avancement dans un fichier JSON (lu par l'interface) ; le
+# journal garde les constructions lancées et les erreurs. Affiche les chemins
+# construits.
+build_with_progress() { # fichier d'avancement, installables…
+  local status="$1" out rc=0
+  shift
+  out=$(mktemp)
+  nix build --no-link --print-out-paths --log-format internal-json -v "$@" \
+    2>&1 >"$out" | "$NAME-progress" "$status" >&2 || rc=$?
+  cat "$out"
+  rm -f "$out" "$status"
+  return "$rc"
+}
+
 wait_network() {
   echo "Attente du réseau…"
   nm-online -q -t 60 2>/dev/null || true
@@ -194,9 +209,17 @@ part_system() {
     patched_package "$name" "$attr" "$patch" "$marker" ||
       echo "Préparation de $name patché impossible, switch tenté quand même."
   done 3< <(jq -r '.extras.patchedPackages[]? | [.name, .attr, .patch, .marker] | @tsv' "$CONFIG")
+  # Évaluation et construction par l'utilisateur (via nix-daemon, qui sait
+  # récupérer toutes les entrées du flake, même privées) ; root ne fait
+  # qu'activer la génération construite.
+  step "Construction du système"
+  echo "Construction du système…"
+  local sys
+  sys=$(build_with_progress "$state/build-status.json" \
+    "$flake#nixosConfigurations.$host.config.system.build.toplevel") || return 1
   step "Switch du système"
-  echo "Switch du système (nixos-rebuild switch)…"
-  sudo "$root_helper" switch || rc=1
+  echo "Activation de $sys…"
+  sudo "$root_helper" switch-to "$sys" || rc=1
   # Le switch, même raté, peut avoir redémarré NetworkManager et
   # systemd-resolved : retour du réseau et du DNS avant la suite.
   wait_network
@@ -285,6 +308,9 @@ part_home() {
   fi
   old_ids=$(jq -r '.entries[].id' "$news_installed" 2>/dev/null || true)
   [ "$(cfg .extras.voxtype)" != true ] || voxtype_models
+  step "Construction de Home Manager"
+  build_with_progress "$state/build-status.json" \
+    "$flake#homeConfigurations.$hmconf.activationPackage" >/dev/null || return 1
   step "Switch de Home Manager"
   home-manager switch -b home-manager-backup --flake "$flake#$hmconf" || return 1
   cp -f "$flake/flake.lock" "$state/installed-home.lock"
@@ -511,13 +537,31 @@ cmd_prebuild() {
 
   cd "$flake"
   echo "Préparation de $host et de Home Manager (construction seule, rien n'est activé)."
-  # --keep-going : un paquet en échec (patch cassé…) n'empêche pas de
-  # construire le reste ; la mise à jour s'en occupera.
-  paths=$(mktemp)
-  nix build --no-link --print-out-paths --keep-going --log-format internal-json -v \
+  jq -n --argjson t "$(now)" '{phase: "eval", builds: {}, downloads: {}, building: [],
+    substituting: [], started: $t, updated: $t}' | write_json "$prebuild_status"
+  # Évaluation par l'utilisateur, via nix-daemon : root ne saurait pas
+  # récupérer une entrée privée du flake (pas de clé SSH). Les .drv obtenus
+  # sont ensuite construits ici, sur le store local, en priorité minimale.
+  local drvs sys_drv home_drv
+  if drvs=$(as_user env -u NIX_REMOTE nix path-info --derivation \
     "$flake#nixosConfigurations.$host.config.system.build.toplevel" \
-    "$flake#homeConfigurations.$hmconf.activationPackage" \
-    2>&1 >"$paths" | "$NAME-progress" "$prebuild_status" || rc=$?
+    "$flake#homeConfigurations.$hmconf.activationPackage"); then
+    sys_drv=$(grep -- '-nixos-system-' <<<"$drvs" | head -n 1 || true)
+    home_drv=$(grep -- '-home-manager-generation' <<<"$drvs" | head -n 1 || true)
+  else
+    echo "Évaluation de la configuration en échec."
+    rc=1
+  fi
+  paths=$(mktemp)
+  if [ -n "${sys_drv:-}" ] && [ -n "${home_drv:-}" ]; then
+    # --keep-going : un paquet en échec (patch cassé…) n'empêche pas de
+    # construire le reste ; la mise à jour s'en occupera.
+    nix build --no-link --print-out-paths --keep-going --log-format internal-json -v \
+      "$sys_drv^*" "$home_drv^*" \
+      2>&1 >"$paths" | "$NAME-progress" "$prebuild_status" || rc=$?
+  else
+    rc=1
+  fi
 
   if [ -n "$flatpak_pid" ]; then
     wait "$flatpak_pid" || true
@@ -526,7 +570,9 @@ cmd_prebuild() {
 
   rm -f "$pending_file"
   local built
-  built=$(jq -R . "$paths" | jq -s 'if length == 2 then {system: .[0], home: .[1]} else null end')
+  built=$(jq -R . "$paths" | jq -s 'if length == 2 then
+    {system: (map(select(test("-nixos-system-"))) | .[0]),
+     home: (map(select(test("-home-manager-generation"))) | .[0])} else null end')
   rm -f "$paths"
   if [ "$rc" -eq 0 ]; then
     echo "Préparation terminée : la mise à jour n'aura presque plus qu'à activer."

@@ -1,7 +1,9 @@
 # @name@-root : les seules actions root du centre de mises à jour, lancées
 # par sudo sans mot de passe (règle posée par le module NixOS). Tout vient
-# de /etc/@name@/config.json, rien des arguments sauf un numéro.
-#   switch                nixos-rebuild switch de la configuration
+# de /etc/@name@/config.json ; en argument, seulement un numéro de
+# génération ou le chemin d'une génération système déjà construite.
+#   switch-to CHEMIN      active une génération système déjà construite
+#                         par l'utilisateur (comme nixos-rebuild switch)
 #   switch-generation N   retour à la génération système N
 #   clean                 nh clean all (générations gardées : config.json)
 #   boost                 préparation en cours à pleine vitesse
@@ -10,16 +12,30 @@ NAME="@name@"
 CONFIG="/etc/$NAME/config.json"
 cfg() { jq -r "$1 // empty" "$CONFIG"; }
 
+# Activation dans sa propre unité, comme nixos-rebuild : elle va au bout
+# même si la mise à jour qui l'a demandée est arrêtée.
+activate() {
+  exec /run/current-system/sw/bin/systemd-run --collect --no-ask-password --pipe --quiet \
+    --service-type=exec --unit=nixos-rebuild-switch-to-configuration --wait \
+    -E LOCALE_ARCHIVE -E NIXOS_INSTALL_BOOTLOADER= \
+    "$1/bin/switch-to-configuration" switch
+}
+
 case "${1:-}" in
-  switch)
-    exec /run/current-system/sw/bin/nixos-rebuild switch --flake "$(cfg .flake)#$(cfg .host)"
+  switch-to)
+    p="${2:-}"
+    [[ "$p" =~ ^/nix/store/[a-z0-9]{32}-nixos-system-[^/]+$ ]] && [ -x "$p/bin/switch-to-configuration" ] ||
+      { echo "génération système invalide : $p" >&2 && exit 2; }
+    /run/current-system/sw/bin/nix-store --check-validity "$p"
+    /run/current-system/sw/bin/nix-env --profile /nix/var/nix/profiles/system --set "$p"
+    activate "$p"
     ;;
   switch-generation)
     n="${2:-}"
     [[ "$n" =~ ^[0-9]+$ ]] || { echo "numéro de génération invalide" >&2 && exit 2; }
     [ -e "/nix/var/nix/profiles/system-$n-link" ] || { echo "génération $n introuvable" >&2 && exit 2; }
     /run/current-system/sw/bin/nix-env --profile /nix/var/nix/profiles/system --switch-generation "$n"
-    exec /nix/var/nix/profiles/system/bin/switch-to-configuration switch
+    activate "$(readlink -f /nix/var/nix/profiles/system)"
     ;;
   clean)
     exec nh clean all --keep "$(cfg .clean.keep)" --keep-since "$(cfg .clean.keepSince)"
@@ -39,7 +55,7 @@ case "${1:-}" in
     echo "Préparation à pleine vitesse."
     ;;
   *)
-    echo "usage : $NAME-root switch | switch-generation N | clean | boost" >&2
+    echo "usage : $NAME-root switch-to CHEMIN | switch-generation N | clean | boost" >&2
     exit 2
     ;;
 esac
