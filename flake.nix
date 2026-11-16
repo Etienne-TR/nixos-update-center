@@ -23,7 +23,7 @@
 
       packages = forAll (pkgs: rec {
         engine = pkgs.callPackage ./engine/package.nix { inherit meta; };
-        tray = pkgs.callPackage ./tray/package.nix { inherit meta; };
+        ui = pkgs.callPackage ./ui/package.nix { inherit meta; };
         default = engine;
       });
 

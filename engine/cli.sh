@@ -14,6 +14,7 @@ run_json="$state/run.json"
 usage() {
   cat <<'USAGE'
 Usage : @command@ [--system] [--home] [--flatpak] [--all] [--flake]
+        @command@ --rollback-system N | --rollback-home N
         @command@ --follow | --stop | --background [parties] | --here [parties]
         @command@ --pending | --news | --boost
 
@@ -28,6 +29,8 @@ Usage : @command@ [--system] [--home] [--flatpak] [--all] [--flake]
   --stop        arrêter la mise à jour en cours
   --background  lancer sans suivre (l'interface ou --follow la montrent)
   --here        lancer dans ce terminal, sans unité systemd
+  --rollback-system N, --rollback-home N
+                retour à la génération N (système ou Home Manager)
   --pending     ce qui attend d'être installé
   --news        nouveautés Home Manager du dernier switch qui en avait
   --boost       passer la préparation en arrière-plan à pleine vitesse
@@ -42,9 +45,16 @@ USAGE
 }
 
 parts=() mode=follow
-for arg in "$@"; do
+while [ $# -gt 0 ]; do
+  arg="$1"
+  shift
   case "$arg" in
     --system | --home | --flatpak | --all | --flake) parts+=("$arg") ;;
+    --rollback-system | --rollback-home)
+      [[ "${1:-}" =~ ^[0-9]+$ ]] || { usage >&2 && exit 2; }
+      parts+=("$arg" "$1")
+      shift
+      ;;
     --follow) mode=follow-only ;;
     --stop) mode=stop ;;
     --background) mode=background ;;

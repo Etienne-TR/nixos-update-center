@@ -21,6 +21,15 @@ Home Manager autonome et Flatpak (installation user).
   (`run.json`, `history.jsonl`, `pending.json`, `runs/*.log`),
   `/run/nixos-update-center/status.json`, `/var/lib/nixos-update-center/prebuild.json`.
 
+- **Interface** (module Home Manager) : icône dans le tray (anneau
+  d'avancement, détail au survol, menu) et fenêtre QML au style KDE, qui suit
+  kdeglobals. Onglets : en attente (entrées du flake, paquets qui changent
+  avec nvd, Flatpaks, Claude Desktop, commits non envoyés, préparation avec
+  « Pleine vitesse » et « Arrêter »), en cours (parties, étape, avancement,
+  journal), historique (exécutions et leurs journaux, générations avec retour
+  arrière, nouveautés Home Manager). app_id `nixos-update-center`, pour une
+  règle de fenêtre flottante.
+
 Le nom est défini à un seul endroit, `meta.nix`.
 
 ## Utilisation
@@ -64,6 +73,6 @@ Un extra ne bloque jamais la mise à jour.
 ## Sous-commandes du moteur
 
 `nixos-update-center-engine run | prebuild | pending | generations | weekly |
-news | boost | open-update | open-journal`. Les actions root passent par
+news | boost | start-prebuild | stop-prebuild | open-update | open-journal`. Les actions root passent par
 `nixos-update-center-root` (sudo sans mot de passe, arguments limités, tout
 le reste lu dans `/etc/nixos-update-center/config.json`).

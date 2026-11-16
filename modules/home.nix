@@ -8,18 +8,15 @@
 let
   inherit (meta) name;
   cfg = config.services.${name};
-  tray = pkgs.callPackage ../tray/package.nix { inherit meta; };
-  # Moteur du système (module NixOS), qui lit /etc/<name>/config.json.
-  engine = "/run/current-system/sw/bin/${name}-engine";
-  statusFile = "/run/${name}/status.json";
+  ui = pkgs.callPackage ../ui/package.nix { inherit meta; };
 in
 {
   options.services.${name} = {
-    enable = lib.mkEnableOption "la partie Home Manager du centre de mises à jour (nouveautés Home Manager, icône du tray) ; le moteur vient du module NixOS";
-    tray.enable = lib.mkOption {
+    enable = lib.mkEnableOption "la partie Home Manager du centre de mises à jour (nouveautés Home Manager, interface) ; le moteur vient du module NixOS";
+    ui.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Icône d'avancement dans le tray pendant la préparation en arrière-plan.";
+      description = "Interface : icône dans le tray (avancement, détail au survol) et fenêtre « ${meta.title} », lancées avec la session graphique.";
     };
   };
 
@@ -33,33 +30,25 @@ in
         news.display = "silent";
       }
 
-      (lib.mkIf cfg.tray.enable {
-        # Lancée par l'unité path quand le fichier d'avancement apparaît ;
-        # se ferme quand il disparaît et notifie le résultat.
-        systemd.user.services."${name}-tray" = {
+      (lib.mkIf cfg.ui.enable {
+        home.packages = [ ui ];
+        systemd.user.services."${name}-ui" = {
           Unit = {
-            Description = "Icône d'avancement de la préparation de la mise à jour";
+            Description = "Interface du centre de mises à jour (icône du tray)";
             PartOf = [ "graphical-session.target" ];
-            After = [ "graphical-session.target" ];
-          };
-          Service = {
-            ExecStart = lib.getExe tray;
-            Environment = [
-              "PATH=/etc/profiles/per-user/${config.home.username}/bin:${config.home.homeDirectory}/.nix-profile/bin:/run/current-system/sw/bin"
-              "QT_QPA_PLATFORM=wayland"
-              "QT_QPA_PLATFORMTHEME="
-              "PREBUILD_STATUS=${statusFile}"
-              "PREBUILD_FLATPAK=/run/${name}/flatpak"
-              "PREBUILD_RESULT=/var/lib/${name}/prebuild.json"
-              "PREBUILD_PENDING=${config.xdg.stateHome}/${name}/prebuild-pending"
-              "PREBUILD_UNIT=${name}-prebuild.service"
-              "UPDATE_CENTER_ENGINE=${engine}"
+            After = [
+              "graphical-session.target"
+              "tray.target"
             ];
           };
-        };
-        systemd.user.paths."${name}-tray" = {
-          Unit.Description = "Icône du tray pendant la préparation de la mise à jour";
-          Path.PathExists = statusFile;
+          Service = {
+            ExecStart = "${lib.getExe ui} --hidden";
+            Restart = "on-failure";
+            # update, notify-send, systemctl : PATH de la session.
+            Environment = [
+              "PATH=/etc/profiles/per-user/${config.home.username}/bin:${config.home.homeDirectory}/.nix-profile/bin:/run/wrappers/bin:/run/current-system/sw/bin"
+            ];
+          };
           Install.WantedBy = [ "graphical-session.target" ];
         };
       })

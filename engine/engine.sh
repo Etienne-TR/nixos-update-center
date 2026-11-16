@@ -12,6 +12,11 @@
 #   weekly         routine hebdomadaire (service utilisateur)
 #   news           nouveautés Home Manager du dernier switch qui en avait
 #   boost          préparation en cours : passer à pleine vitesse
+#   start-prebuild, stop-prebuild
+#                  lancer ou arrêter la préparation (sans reprise au démarrage)
+#   open-update, open-journal
+#                  mise à jour (interface ou terminal), journal de la
+#                  préparation dans un terminal
 #
 # Configuration : /etc/@name@/config.json, écrit par le module NixOS
 # (UPDATE_CENTER_CONFIG pour en donner un autre).
@@ -747,6 +752,19 @@ open_terminal() {
     "$(command -v "${terminal[0]}")" "${terminal[@]:1}" "$@"
 }
 
+# Préparation demandée à la main (interface).
+cmd_start_prebuild() {
+  mkdir -p "$(dirname "$pending_file")"
+  touch "$pending_file"
+  systemctl start "$prebuild_unit"
+}
+
+# Préparation arrêtée à la main : pas de reprise au prochain démarrage.
+cmd_stop_prebuild() {
+  rm -f "$pending_file"
+  systemctl stop --no-block "$prebuild_unit"
+}
+
 # Journal de la préparation en direct, dans un terminal.
 cmd_journal() {
   echo "Préparation de la mise à jour (Ctrl+C pour fermer)"
@@ -784,5 +802,7 @@ case "$cmd" in
   terminal-update) cmd_terminal_update ;;
   news) cmd_news ;;
   boost) cmd_boost ;;
+  start-prebuild) cmd_start_prebuild ;;
+  stop-prebuild) cmd_stop_prebuild ;;
   *) die "sous-commande inconnue : ${cmd:-(aucune)} (run, prebuild, pending, generations, weekly, news, boost)" ;;
 esac
