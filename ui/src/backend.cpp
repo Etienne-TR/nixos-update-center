@@ -60,6 +60,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   m_timer.start(1000);
   poll();
   refreshGenerations();
+  refreshRoutine();
 }
 
 QString Backend::title() const { return QStringLiteral(APP_TITLE); }
@@ -236,8 +237,52 @@ void Backend::checkUpdates() {
   QProcess::startDetached("systemd-run", {"--user", "--collect", "--quiet",
                                           QStringLiteral("--unit=" APP_NAME "-weekly-now"),
                                           "--setenv=PATH=" + qEnvironmentVariable("PATH"), m_engine,
-                                          "weekly"});
+                                          "weekly", "--manual"});
   emit runStarted();
+}
+
+void Backend::runEngine(const QStringList &args, std::function<void(int, const QByteArray &)> done) {
+  auto *p = new QProcess(this);
+  connect(p, &QProcess::finished, this, [p, done](int code) {
+    p->deleteLater();
+    done(code, p->readAllStandardOutput() + p->readAllStandardError());
+  });
+  p->start(m_engine, args);
+}
+
+void Backend::refreshRoutine() {
+  runEngine({"settings"}, [this](int, const QByteArray &out) {
+    m_routine = QJsonDocument::fromJson(out).object().toVariantMap();
+    emit routineChanged();
+  });
+}
+
+static QString settingsPath() {
+  return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/" APP_NAME
+                                                                                  "/settings.json";
+}
+
+// Écrit ~/.config/<name>/settings.json puis l'applique (horaire du timer).
+void Backend::saveRoutine(const QVariantMap &routine) {
+  QDir().mkpath(QFileInfo(settingsPath()).absolutePath());
+  QFile f(settingsPath());
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    emit error("Impossible d'écrire " + settingsPath());
+    return;
+  }
+  QJsonObject root;
+  root.insert("routine", QJsonObject::fromVariantMap(routine));
+  f.write(QJsonDocument(root).toJson());
+  f.close();
+  runEngine({"apply-settings"}, [this](int code, const QByteArray &out) {
+    if (code != 0) emit error(QString::fromUtf8(out).trimmed());
+    refreshRoutine();
+  });
+}
+
+void Backend::resetRoutine() {
+  QFile::remove(settingsPath());
+  runEngine({"apply-settings"}, [this](int, const QByteArray &) { refreshRoutine(); });
 }
 
 void Backend::stopRun() { QProcess::startDetached(QStringLiteral(APP_NAME), {"--stop"}); }

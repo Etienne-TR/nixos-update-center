@@ -11,7 +11,10 @@
 #   generations    générations système et Home Manager, en JSON
 #   check          chercher les mises à jour : nix flake update (commit),
 #                  puis préparation en arrière-plan
-#   weekly         routine hebdomadaire : check, puis notification
+#   weekly [--manual]
+#                  routine hebdomadaire : check, puis notification
+#   settings, apply-settings
+#                  réglages de la routine (settings.json) : effectifs, appliquer
 #   news           nouveautés Home Manager du dernier switch qui en avait
 #   boost          préparation en cours : passer à pleine vitesse
 #   start-prebuild, stop-prebuild
@@ -43,7 +46,26 @@ die() {
 }
 [ -r "$CONFIG" ] || die "configuration introuvable ($CONFIG)"
 
-cfg() { jq -r "$1 // empty" "$CONFIG"; }
+# Réglages de la routine modifiables depuis l'interface, sans rebuild :
+# ~/.config/@name@/settings.json, dont seule la clé « routine » est lue (par
+# dessus celle de config.json), y compris par la préparation (root).
+user_settings() {
+  local home="${HOME:-}"
+  [ "$(id -u)" -ne 0 ] || home=$(jq -r '.userHome // empty' "$CONFIG")
+  if [ "$(id -u)" -ne 0 ] && [ -n "${XDG_CONFIG_HOME:-}" ]; then
+    echo "$XDG_CONFIG_HOME/$NAME/settings.json"
+  else
+    echo "$home/.config/$NAME/settings.json"
+  fi
+}
+settings_file=$(user_settings)
+cfg() {
+  local s=/dev/null
+  [ ! -r "$settings_file" ] || s="$settings_file"
+  jq -r --slurpfile u "$s" \
+    '(.routine += ((($u[0] // {}).routine // {}) | if type == "object" then . else {} end)) | '"$1"' // empty' \
+    "$CONFIG"
+}
 
 flake=$(cfg .flake)
 host=$(cfg .host)
@@ -527,7 +549,7 @@ cmd_prebuild() {
       env HOME="$home" XDG_RUNTIME_DIR="/run/user/$(id -u "$user")" "$@"
   }
 
-  if [ "$(cfg .flatpak)" = true ]; then
+  if [ "$(cfg .routine.flatpak)" = true ]; then
     echo running >"$prebuild_flatpak"
     (
       if as_user flatpak update --user --no-deploy -y --noninteractive; then
@@ -717,7 +739,9 @@ cmd_check() {
     return 1
   }
   before=$(git rev-parse HEAD)
-  if ! "$NAME" --flake; then
+  if [ "$(cfg .routine.flakeUpdate)" != true ]; then
+    echo "Mise à jour du flake désactivée dans les réglages : préparation avec le flake.lock actuel."
+  elif ! "$NAME" --flake; then
     notify dialog-warning-symbolic "Mise à jour du système" "La mise à jour du flake a échoué."
     return 1
   fi
@@ -732,10 +756,15 @@ cmd_check() {
 
 # Routine hebdomadaire : recherche, puis, si flake.lock a changé,
 # notification « Mettre à jour ».
-cmd_weekly() {
+cmd_weekly() { # --manual : lancée depuis l'interface, même si désactivée
   local rc=0 choice
+  if [ "${1:-}" != --manual ] && [ "$(cfg .routine.enabled)" != true ]; then
+    echo "Routine désactivée dans les réglages."
+    exit 0
+  fi
   cmd_check || rc=$?
   [ "$rc" -eq 0 ] || exit 0
+  [ "$(cfg .routine.notify)" = true ] || exit 0
   # -t 0 : sinon noctalia retire la popup sans signal et le bouton n'existe
   # plus dans l'historique (notify-send attendrait sans fin).
   choice=$(notify software-update-available-symbolic "Mises à jour disponibles" \
@@ -745,6 +774,31 @@ cmd_weekly() {
     update) open_update ;;
     open) systemd-run --user --collect --unit="$NAME-ui-open-$(now)" "$NAME-ui" --show || true ;;
   esac
+}
+
+# Applique les réglages de l'interface : horaire de la routine (surcharge
+# utilisateur du timer, ou retour à celui de la configuration).
+cmd_apply_settings() {
+  local cal dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$NAME-weekly.timer.d"
+  cal=$(jq -r '.routine.calendar // empty' "$settings_file" 2>/dev/null || true)
+  if [ -n "$cal" ]; then
+    systemd-analyze calendar "$cal" >/dev/null || die "horaire invalide : $cal"
+    mkdir -p "$dir"
+    printf '[Timer]\nOnCalendar=\nOnCalendar=%s\n' "$cal" >"$dir/settings.conf"
+  else
+    rm -f "$dir/settings.conf"
+  fi
+  systemctl --user daemon-reload
+  systemctl --user restart "$NAME-weekly.timer" 2>/dev/null || true
+}
+
+# Réglages effectifs de la routine, en JSON (interface).
+cmd_settings() {
+  local next
+  next=$(systemctl --user show "$NAME-weekly.timer" -P NextElapseUSecRealtime 2>/dev/null || true)
+  jq -n --argjson r "$(cfg '.routine' | jq -c .)" --arg next "$next" \
+    --argjson custom "$([ -r "$settings_file" ] && echo true || echo false)" \
+    '$r + {next: $next, custom: $custom}'
 }
 
 # Lance la mise à jour depuis un clic : dans l'interface si elle est
@@ -813,7 +867,9 @@ case "$cmd" in
   prebuild) cmd_prebuild ;;
   pending) cmd_pending ;;
   generations) cmd_generations ;;
-  weekly) cmd_weekly ;;
+  weekly) cmd_weekly "$@" ;;
+  apply-settings) cmd_apply_settings ;;
+  settings) cmd_settings ;;
   check)
     rc=0
     cmd_check || rc=$?

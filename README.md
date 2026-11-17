@@ -30,6 +30,12 @@ Home Manager autonome et Flatpak (installation user).
   arrière, nouveautés Home Manager). app_id `nixos-update-center`, pour une
   règle de fenêtre flottante.
 
+- **Réglages de la routine** dans l'interface (onglet Réglages) : activée ou
+  non, jour et heure, mise à jour du flake, Flatpaks, notification. Écrits
+  dans `~/.config/nixos-update-center/settings.json` (seule la clé `routine`
+  est lue) et appliqués sans rebuild ; l'horaire passe par une surcharge
+  utilisateur du timer. Les valeurs par défaut viennent du module NixOS.
+
 Le nom est défini à un seul endroit, `meta.nix`.
 
 ## Utilisation

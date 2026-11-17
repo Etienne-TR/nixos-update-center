@@ -9,6 +9,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <functional>
+
 class Backend : public QObject {
   Q_OBJECT
   // Exécution en cours ou dernière (run.json), avec « active ».
@@ -32,6 +34,8 @@ class Backend : public QObject {
   Q_PROPERTY(QString summary READ summary NOTIFY summaryChanged)
   Q_PROPERTY(double progress READ progress NOTIFY summaryChanged)
   Q_PROPERTY(QString title READ title CONSTANT)
+  // Réglages effectifs de la routine (config.json, puis settings.json).
+  Q_PROPERTY(QVariantMap routine READ routine NOTIFY routineChanged)
 
  public:
   explicit Backend(QObject *parent = nullptr);
@@ -53,9 +57,13 @@ class Backend : public QObject {
   QString title() const;
   bool runActive() const { return m_run.value("active").toBool(); }
   bool updateReady() const;
+  QVariantMap routine() const { return m_routine; }
 
   Q_INVOKABLE void startUpdate(const QStringList &parts);
   Q_INVOKABLE void checkUpdates();
+  Q_INVOKABLE void refreshRoutine();
+  Q_INVOKABLE void saveRoutine(const QVariantMap &routine);
+  Q_INVOKABLE void resetRoutine();
   Q_INVOKABLE void stopRun();
   Q_INVOKABLE void startPrebuild();
   Q_INVOKABLE void stopPrebuild();
@@ -77,6 +85,9 @@ class Backend : public QObject {
   void historyChanged();
   void generationsChanged();
   void summaryChanged();
+  void routineChanged();
+  // Erreur à montrer (réglages refusés…).
+  void error(const QString &message);
   // Une exécution vient d'être lancée depuis l'interface.
   void runStarted();
 
@@ -93,6 +104,8 @@ class Backend : public QObject {
 
   QString m_state, m_engine;
   QTimer m_timer;
+  QVariantMap m_routine;
+  void runEngine(const QStringList &args, std::function<void(int, const QByteArray &)> done);
   QVariantMap m_run, m_build, m_prebuild, m_prebuildResult, m_pending, m_generations;
   QVariantList m_history;
   QString m_log, m_logPath, m_news, m_summary;

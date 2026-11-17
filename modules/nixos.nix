@@ -27,6 +27,15 @@ let
     clean = { inherit (cfg.clean) enable keep keepSince; };
     pendingFile = "${userHome}/.local/state/${name}/prebuild-pending";
     rootHelper = root;
+    # Valeurs par défaut des réglages de la routine (modifiables ensuite
+    # dans l'interface, ~/.config/<name>/settings.json).
+    routine = {
+      enabled = cfg.schedule != null;
+      calendar = cfg.schedule;
+      flakeUpdate = true;
+      flatpak = cfg.flatpak;
+      notify = true;
+    };
     extras = {
       patchedPackages = lib.mapAttrsToList (n: p: {
         name = n;

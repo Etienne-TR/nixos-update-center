@@ -160,7 +160,11 @@ ApplicationWindow {
                 }
                 TabButton { text: window.running ? "En cours ●" : "En cours" }
                 TabButton { text: "Historique" }
-                onCurrentIndexChanged: if (currentIndex === 2) backend.refreshGenerations()
+                TabButton { text: "Réglages" }
+                onCurrentIndexChanged: {
+                    if (currentIndex === 2) backend.refreshGenerations();
+                    if (currentIndex === 3) backend.refreshRoutine();
+                }
             }
         }
     }
@@ -172,5 +176,6 @@ ApplicationWindow {
         PendingPage {}
         RunPage {}
         HistoryPage {}
+        SettingsPage {}
     }
 }
