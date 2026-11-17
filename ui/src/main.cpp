@@ -182,7 +182,8 @@ int main(int argc, char **argv) {
     const bool busy = backend.runActive() || backend.prebuildActive();
     const bool waiting = backend.summary() != "À jour";
     tray.setIcon(makeIcon(app.palette().highlight().color(), busy, backend.progress(), waiting));
-    QString tip = backend.summary();
+    // Mode développement : reconnaître son icône parmi les deux.
+    QString tip = (qmlDir.isEmpty() ? QString() : QString(APP_TITLE " (développement)\n")) + backend.summary();
     if (backend.prebuildActive() && !backend.runActive()) {
       const QVariantMap st = backend.prebuild();
       const QVariantMap b = st.value("builds").toMap(), d = st.value("downloads").toMap();
@@ -235,10 +236,9 @@ int main(int argc, char **argv) {
   QFileSystemWatcher watcher;
   QTimer reloadTimer;
   if (!qmlDir.isEmpty()) {
-    auto title = [&window, qmlDir] {
+    auto title = [&window] {
       if (!window) return;
       window->setTitle(window->title() + " (développement)");
-      window->setProperty("devDir", qmlDir);
     };
     title();
     auto watchFiles = [&watcher, qmlDir] {
