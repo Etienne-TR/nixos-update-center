@@ -222,15 +222,21 @@ ScrollView {
                     Layout.preferredHeight: Kirigami.Units.gridUnit * 9
                     text: partCard.st.diff || ""
                 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Kirigami.Units.smallSpacing
+                    Item { Layout.fillWidth: true }
+                    Button {
+                        icon.name: "system-software-update"
+                        text: "Appliquer les modifications"
+                        enabled: !window.running && (partCard.st.changed !== false)
+                        onClicked: backend.startUpdate([partCard.modelData.key === "system" ? "--system" : "--home"])
+                    }
+                }
             }
         }
 
         // ── Bloc 2 : nouvelles versions (bouton « Mettre à jour le flake ») ──
-        Kirigami.Heading {
-            level: 3
-            text: "Versions des paquets (flake)"
-            Layout.topMargin: Kirigami.Units.largeSpacing
-        }
 
         Card {
             id: flakeNixCard
@@ -253,6 +259,17 @@ ScrollView {
                 text: "flake.nix modifié, non committé"
                 font.family: Kirigami.Theme.fixedWidthFont.family
             }
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                Item { Layout.fillWidth: true }
+                Button {
+                    icon.name: "system-software-update"
+                    text: "Appliquer les modifications"
+                    enabled: !window.running && (true)
+                    onClicked: backend.startUpdate(["--system", "--home"])
+                }
+            }
         }
 
         Card {
@@ -267,7 +284,6 @@ ScrollView {
             }
             visible: lockInputs.length > 0
             title: "Versions du flake.lock pas encore installées"
-            subtitle: "installées par « Appliquer »"
             Repeater {
                 model: lockCard.lockInputs
                 RowLayout {
@@ -285,10 +301,21 @@ ScrollView {
                     }
                 }
             }
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                Item { Layout.fillWidth: true }
+                Button {
+                    icon.name: "system-software-update"
+                    text: "Appliquer les modifications"
+                    enabled: !window.running && (true)
+                    onClicked: backend.startUpdate(["--system", "--home"])
+                }
+            }
         }
 
         Card {
-            title: "Nouvelles versions en ligne"
+            title: "Versions des paquets (flake)"
             subtitle: (page.upstream.inputs || []).length > 0 ? page.upstream.inputs.length + " entrée(s) avec une version plus récente" : ""
             Label {
                 visible: (page.upstream.inputs || []).length === 0
@@ -315,13 +342,19 @@ ScrollView {
                     }
                 }
             }
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                Item { Layout.fillWidth: true }
+                Button {
+                    icon.name: "download"
+                    text: "Mettre à jour le flake"
+                    enabled: !window.running && (!backend.prebuildActive)
+                    onClicked: backend.checkUpdates()
+                }
+            }
         }
 
-        Kirigami.Heading {
-            level: 3
-            text: "Autres mises à jour"
-            Layout.topMargin: Kirigami.Units.largeSpacing
-        }
 
         Card {
             title: "Flatpaks"
@@ -340,6 +373,17 @@ ScrollView {
                     Layout.fillWidth: true
                 }
             }
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                Item { Layout.fillWidth: true }
+                Button {
+                    icon.name: "system-software-update"
+                    text: "Mettre à jour"
+                    enabled: !window.running && ((page.pending.flatpaks || []).length > 0)
+                    onClicked: backend.startUpdate(["--flatpak"])
+                }
+            }
         }
 
         Card {
@@ -349,6 +393,17 @@ ScrollView {
                 property var c: page.pending.claudeDesktop || {}
                 text: c.available ? "Version " + c.latest + " disponible (configurée : " + c.configured + "), écrite dans la config par « Appliquer » (Home Manager)."
                                   : "À jour (" + c.configured + ")."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                Item { Layout.fillWidth: true }
+                Button {
+                    icon.name: "system-software-update"
+                    text: "Mettre à jour"
+                    enabled: !window.running && (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available))
+                    onClicked: backend.startUpdate(["--home"])
+                }
             }
         }
 
