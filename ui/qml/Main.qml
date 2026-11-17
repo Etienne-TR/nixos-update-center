@@ -141,6 +141,16 @@ ApplicationWindow {
         }
     }
 
+    // Mode développement (ui/dev.sh) : bandeau pour ne pas confondre avec
+    // l'interface installée.
+    property string devDir: ""
+    footer: Kirigami.InlineMessage {
+        visible: window.devDir.length > 0
+        type: Kirigami.MessageType.Warning
+        position: Kirigami.InlineMessage.Position.Footer
+        text: "Version de développement : QML lu dans " + window.devDir + ", rechargé à chaque modification."
+    }
+
     StackLayout {
         anchors.fill: parent
         anchors.margins: Kirigami.Units.largeSpacing

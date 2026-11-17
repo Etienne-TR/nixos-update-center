@@ -235,8 +235,10 @@ int main(int argc, char **argv) {
   QFileSystemWatcher watcher;
   QTimer reloadTimer;
   if (!qmlDir.isEmpty()) {
-    auto title = [&window] {
-      if (window) window->setTitle(window->title() + " (développement)");
+    auto title = [&window, qmlDir] {
+      if (!window) return;
+      window->setTitle(window->title() + " (développement)");
+      window->setProperty("devDir", qmlDir);
     };
     title();
     auto watchFiles = [&watcher, qmlDir] {

@@ -240,8 +240,16 @@ unchanged() { # installable, génération active
 # Comme unchanged, en JSON : true (à appliquer), false, null (évaluation
 # en échec).
 differs() { # installable, génération active
-  local out
-  out=$(nix eval --raw "$1.outPath" 2>/dev/null) || { echo null && return; }
+  local out err
+  err=$(mktemp)
+  if ! out=$(nix eval --raw "$1.outPath" 2>"$err"); then
+    # Dernière ligne d'erreur de Nix, gardée pour l'interface.
+    grep -v '^\s*$' "$err" | tail -n 1 >>"$state/pending-errors.tmp" || true
+    rm -f "$err"
+    echo null
+    return
+  fi
+  rm -f "$err"
   if [ -e "$2" ] && [ "$(readlink -f "$2")" = "$out" ]; then echo false; else echo true; fi
 }
 
@@ -742,6 +750,12 @@ changes() { # partie, dépôt, flake.lock relatif au dépôt, flake relatif, fla
 # Écrit pending.json et l'affiche.
 cmd_pending() {
   local repo rel dir cur tmp
+  # Une seule vérification à la fois (deux fenêtres, routine…) : la suivante
+  # attend la fin de la première.
+  mkdir -p "$state"
+  exec 8>"$state/pending.lock"
+  flock 8
+  rm -f "$state/pending-errors.tmp"
   local sys_changed=null home_changed=null upstream="[]" upstream_ok=false
   local system_diff="" home_diff="" built_sys built_home
   local flatpaks="[]" claude="null" unpushed="[]" out rc
@@ -809,14 +823,16 @@ cmd_pending() {
     --arg sys "$system_diff" --arg home "$home_diff" \
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
-    --argjson flatpaks "$flatpaks" --argjson claude "$claude" --argjson unpushed "$unpushed" '
+    --argjson flatpaks "$flatpaks" --argjson claude "$claude" --argjson unpushed "$unpushed" \
+    --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s . || echo "[]")" '
     { time: $time,
       apply: {
         system: ({changed: $sysc, built: ($sysb != ""), diff: $sys} + $sysch),
         home: ({changed: $homec, built: ($homeb != ""), diff: $home} + $homech),
         flake: ($flakech | {commits, dirty}) },
       upstream: {checked: $upok, inputs: $upstream},
-      flatpaks: $flatpaks, claudeDesktop: $claude, unpushed: $unpushed }' |
+      flatpaks: $flatpaks, claudeDesktop: $claude, unpushed: $unpushed,
+      errors: $errors }' |
     tee "$state/pending.json.tmp"
   mv -f "$state/pending.json.tmp" "$state/pending.json"
   rm -rf "$tmp"

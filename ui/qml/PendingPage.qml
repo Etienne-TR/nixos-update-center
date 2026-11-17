@@ -220,6 +220,14 @@ ScrollView {
                     text: "Paquets qui changent (construits par la préparation)"
                     font.bold: true
                 }
+                Label {
+                    visible: partCard.st.changed === null && (page.pending.errors || []).length > 0
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: Kirigami.Theme.negativeTextColor
+                    font.family: Kirigami.Theme.fixedWidthFont.family
+                    text: (page.pending.errors || []).join("\n")
+                }
                 RunProgress { partId: partCard.modelData.key }
                 MonoText {
                     visible: !!partCard.st.diff
