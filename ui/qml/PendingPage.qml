@@ -169,12 +169,14 @@ ScrollView {
                     }
                 }
             }
-        }
 
-        Card {
-            visible: (page.apply.commits || []).length > 0 || (page.apply.dirty || []).length > 0
-            title: "Changements de la config"
-            subtitle: "depuis la dernière application du système"
+            // Pourquoi : ce qui a changé depuis la dernière application.
+            Label {
+                visible: (page.apply.commits || []).length > 0
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                text: "Commits depuis la dernière application"
+                font.bold: true
+            }
             Repeater {
                 model: page.apply.commits || []
                 Label {
@@ -187,7 +189,8 @@ ScrollView {
             }
             Label {
                 visible: (page.apply.dirty || []).length > 0
-                text: "Fichiers modifiés non committés :"
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                text: "Fichiers modifiés non committés"
                 font.bold: true
             }
             Repeater {
@@ -200,20 +203,21 @@ ScrollView {
                     font.family: Kirigami.Theme.fixedWidthFont.family
                 }
             }
-        }
-
-        Card {
-            visible: (page.apply.inputs || []).length > 0
-            title: "Entrées du flake.lock à appliquer"
-            subtitle: page.apply.inputs ? page.apply.inputs.length + " changée(s) depuis le dernier switch" : ""
+            Label {
+                visible: (page.apply.inputs || []).length > 0
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                text: "Entrées du flake.lock pas encore installées"
+                font.bold: true
+            }
             Repeater {
                 model: page.apply.inputs || []
                 RowLayout {
                     required property var modelData
                     Layout.fillWidth: true
-                    Label { text: modelData.name; font.bold: true }
+                    Label { text: modelData.name }
                     Label {
                         Layout.fillWidth: true
+                        opacity: 0.8
                         text: (modelData.from ? page.shortDate(modelData.from.date) : "nouvelle") + " → " + page.shortDate(modelData.to.date)
                     }
                     Kirigami.UrlButton {
