@@ -43,9 +43,9 @@ ScrollView {
             }
             Button {
                 icon.name: "view-refresh"
-                text: "Vérifier"
+                text: "Rechercher les mises à jour disponibles"
                 ToolTip.visible: hovered
-                ToolTip.text: "Recalcule ce qui attend d'être installé, sans rien modifier."
+                ToolTip.text: "Config à appliquer (système, Home Manager), nouvelles versions du flake (sans toucher flake.lock), Flatpaks : rien n'est modifié. Lancée aussi à l'ouverture de la fenêtre."
                 enabled: !backend.pendingBusy
                 onClicked: backend.refreshPending()
             }

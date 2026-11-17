@@ -12,6 +12,15 @@ ApplicationWindow {
     minimumHeight: 420
     visible: false
 
+    // À l'ouverture de la fenêtre : recherche des mises à jour si la
+    // dernière date de plus de 5 minutes (pas au démarrage de la session,
+    // où l'app est cachée).
+    onVisibleChanged: {
+        if (!visible || backend.pendingBusy) return;
+        const t = backend.pending.time || 0;
+        if (Date.now() / 1000 - t > 300) backend.refreshPending();
+    }
+
     // Fermer la fenêtre la cache : l'icône reste dans le tray.
     onClosing: (close) => { close.accepted = false; window.hide(); }
 
