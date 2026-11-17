@@ -15,21 +15,19 @@ ScrollView {
     readonly property var pre: backend.prebuild
     readonly property var result: backend.prebuildResult
 
-    // Version du paquet principal de l'entrée si elle change (« 1.2 → 1.3 »),
-    // sinon les dates ; plus le nombre de commits quand GitHub le donne.
+    // Toujours « actuelle → disponible » : version du paquet principal de
+    // l'entrée quand elle en a une, et date du commit (avec l'heure si c'est
+    // le même jour) ; plus le nombre de commits quand GitHub le donne.
     function revLabel(input) {
         const loc = Qt.locale("fr_FR");
         const day = s => s ? new Date(s * 1000).toLocaleDateString(loc, "d MMM") : "?";
+        const time = s => s ? new Date(s * 1000).toLocaleTimeString(loc, "HH:mm") : "";
+        if (!input.from) return "nouvelle entrée" + (input.toVersion ? " · " + input.toVersion : "");
         const parts = [];
-        if (!input.from)
-            parts.push("nouvelle entrée");
-        else if (input.fromVersion && input.toVersion && input.fromVersion !== input.toVersion)
-            parts.push(input.fromVersion + " → " + input.toVersion);
-        else {
-            if (input.toVersion) parts.push("version " + input.toVersion);
-            const d1 = day(input.from.date), d2 = day(input.to.date);
-            parts.push(d1 === d2 ? d2 : d1 + " → " + d2);
-        }
+        if (input.fromVersion || input.toVersion)
+            parts.push((input.fromVersion || "?") + " → " + (input.toVersion || "?"));
+        const f = input.from.date, t = input.to.date;
+        parts.push(day(f) === day(t) ? day(f) + " " + time(f) + " → " + time(t) : day(f) + " → " + day(t));
         if (input.commits) parts.push(input.commits + " commit" + (input.commits > 1 ? "s" : ""));
         return parts.join(" · ");
     }
