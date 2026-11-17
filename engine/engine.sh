@@ -682,6 +682,44 @@ lock_diff() { # ancien, nouveau
                  owner: (.to.owner // null), repo: (.to.repo // null), type: (.to.type // null)} } ]'
 }
 
+# Changements depuis la dernière application d'une partie (system ou home),
+# en JSON : {commits: [{hash, subject}], dirty: ["M chemin"], inputs: […]}.
+changes() { # partie, dépôt, flake.lock relatif au dépôt, flake relatif, flake.lock, tmp
+  local part="$1" repo="$2" rel="$3" dir="$4" cur="$5" tmp="$6" rev lock prefixes
+  prefixes=$(jq -c --arg p "$part" '.paths[$p] // []' "$CONFIG")
+  # Fichier (relatif au flake) concerné par cette partie : dans un de ses
+  # dossiers, ou hors des dossiers de toutes les parties.
+  # shellcheck disable=SC2016 # expression jq
+  local relevant='(. as $f | ($own | any(. as $d | $f | startswith($d + "/"))))
+    or (. as $f | ($all | any(. as $d | $f | startswith($d + "/"))) | not)'
+  lock="$state/installed-$part.lock"
+  if [ ! -e "$lock" ]; then
+    lock="$tmp/base-$part.lock"
+    git -C "$repo" show "@{u}:$rel" >"$lock" 2>/dev/null || cp "$cur" "$lock"
+  fi
+  rev=$(cat "$state/installed-$part.rev" 2>/dev/null || git -C "$repo" rev-parse '@{u}' 2>/dev/null || true)
+  local all
+  all=$(jq -c '[.paths[]?[]]' "$CONFIG")
+  {
+    if [ -n "$rev" ]; then
+      git -C "$repo" log --format='@@%h%x09%s' --name-only --relative="$dir" "$rev..HEAD" -- "$dir" 2>/dev/null || true
+    fi
+  } | jq -R -s --argjson own "$prefixes" --argjson all "$all" '
+      split("\n@@") | map(ltrimstr("@@") | select(length > 0) | split("\n") | map(select(length > 0)))
+      | map({hash: (.[0] | split("\t")[0]), subject: (.[0] | split("\t")[1:] | join("\t")),
+             files: .[1:]})
+      | map(select(.files | length == 0 or any('"$relevant"')))
+      | map(del(.files))' >"$tmp/commits-$part"
+  git -C "$repo" status --porcelain -- "$dir" 2>/dev/null |
+    jq -R -s --argjson own "$prefixes" --argjson all "$all" --arg dir "$dir/" '
+      split("\n") | map(select(length > 0))
+      | map({st: .[0:2], path: (.[3:] | ltrimstr($dir))})
+      | map(select(.path | '"$relevant"') | "\(.st) \(.path)")' >"$tmp/dirty-$part"
+  jq -n --slurpfile c "$tmp/commits-$part" --slurpfile d "$tmp/dirty-$part" \
+    --argjson inputs "$(lock_diff "$lock" "$cur")" \
+    '{commits: $c[0], dirty: $d[0], inputs: $inputs}'
+}
+
 # Ce qui attend, en trois tests séparés :
 # - config système à appliquer : le système évalué diffère de la génération
 #   active (changement de la config ou du flake.lock déjà committé) ;
@@ -693,9 +731,9 @@ lock_diff() { # ancien, nouveau
 # la préparation a construit), Flatpaks, Claude Desktop, commits non envoyés.
 # Écrit pending.json et l'affiche.
 cmd_pending() {
-  local repo rel dir base cur tmp rev
-  local sys_changed=null home_changed=null applied="[]" upstream="[]" upstream_ok=false
-  local system_diff="" home_diff="" built_sys built_home commits="[]" dirty="[]"
+  local repo rel dir cur tmp
+  local sys_changed=null home_changed=null upstream="[]" upstream_ok=false
+  local system_diff="" home_diff="" built_sys built_home
   local flatpaks="[]" claude="null" unpushed="[]" out rc
   mkdir -p "$state"
   tmp=$(mktemp -d)
@@ -709,20 +747,13 @@ cmd_pending() {
   home_changed=$(differs "$flake#homeConfigurations.$hmconf.activationPackage" \
     "$HOME/.local/state/nix/profiles/home-manager")
 
-  # Détail de ce qui est à appliquer : entrées du flake.lock changées depuis
-  # le dernier switch du système, commits et fichiers modifiés depuis.
-  base="$state/installed-system.lock"
-  if [ ! -e "$base" ]; then
-    base="$tmp/base.lock"
-    git -C "$repo" show "@{u}:$rel" >"$base" 2>/dev/null || cp "$cur" "$base"
-  fi
-  applied=$(lock_diff "$base" "$cur")
-  rev=$(cat "$state/installed-system.rev" 2>/dev/null || git -C "$repo" rev-parse '@{u}' 2>/dev/null || true)
-  if [ -n "$rev" ]; then
-    commits=$(git -C "$repo" log --format='%h%x09%s' "$rev..HEAD" -- "$dir" 2>/dev/null |
-      jq -R 'split("\t") | {hash: .[0], subject: .[1]}' | jq -s . || echo "[]")
-  fi
-  dirty=$(git -C "$repo" status --porcelain -- "$dir" 2>/dev/null | jq -R . | jq -s . || echo "[]")
+  # Détail de ce qui est à appliquer, pour chaque partie depuis sa dernière
+  # application : commits et fichiers modifiés (rangés par dossier :
+  # config.json paths.system / paths.home ; ailleurs, comme flake.nix ou
+  # flake.lock : les deux), entrées du flake.lock pas encore installées.
+  local sys_changes home_changes
+  sys_changes=$(changes system "$repo" "$rel" "$dir" "$cur" "$tmp")
+  home_changes=$(changes home "$repo" "$rel" "$dir" "$cur" "$tmp")
 
   # Paquets qui changent, si la préparation a construit cette version.
   built_sys=$(jq -r '.paths.system // empty' "$prebuild_result" 2>/dev/null || true)
@@ -763,16 +794,15 @@ cmd_pending() {
 
   jq -n --argjson time "$(now)" \
     --argjson sysc "$sys_changed" --argjson homec "$home_changed" \
-    --argjson applied "$applied" --argjson commits "$commits" --argjson dirty "$dirty" \
+    --argjson sysch "$sys_changes" --argjson homech "$home_changes" \
     --arg sys "$system_diff" --arg home "$home_diff" \
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
     --argjson flatpaks "$flatpaks" --argjson claude "$claude" --argjson unpushed "$unpushed" '
     { time: $time,
       apply: {
-        system: {changed: $sysc, built: ($sysb != ""), diff: $sys},
-        home: {changed: $homec, built: ($homeb != ""), diff: $home},
-        inputs: $applied, commits: $commits, dirty: $dirty },
+        system: ({changed: $sysc, built: ($sysb != ""), diff: $sys} + $sysch),
+        home: ({changed: $homec, built: ($homeb != ""), diff: $home} + $homech) },
       upstream: {checked: $upok, inputs: $upstream},
       flatpaks: $flatpaks, claudeDesktop: $claude, unpushed: $unpushed }' |
     tee "$state/pending.json.tmp"

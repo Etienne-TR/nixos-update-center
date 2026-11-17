@@ -27,6 +27,7 @@ let
     clean = { inherit (cfg.clean) enable keep keepSince; };
     pendingFile = "${userHome}/.local/state/${name}/prebuild-pending";
     rootHelper = root;
+    inherit (cfg) paths;
     # Valeurs par défaut des réglages de la routine (modifiables ensuite
     # dans l'interface, ~/.config/<name>/settings.json).
     routine = {
@@ -73,6 +74,22 @@ in
         `hm-nouveautes`. false pour cohabiter avec une ancienne commande du
         même nom pendant une migration : `${name}` reste disponible.
       '';
+    };
+
+    paths = {
+      system = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "nixos"
+          "hosts"
+        ];
+        description = "Dossiers du flake (relatifs) qui ne concernent que le système : leurs changements sont rangés dans « Système NixOS » de l'interface. Ce qui est hors de tous les dossiers apparaît dans les deux parties.";
+      };
+      home = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ "home-manager" ];
+        description = "Dossiers du flake (relatifs) qui ne concernent que Home Manager.";
+      };
     };
 
     flake = lib.mkOption {

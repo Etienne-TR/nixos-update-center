@@ -148,102 +148,101 @@ ScrollView {
             text: "Ta config (commits, fichiers modifiés, flake.lock) diffère-t-elle de ce qui est installé ? Une partie à jour est sautée par « Appliquer », sans construction ni nettoyage."
         }
 
-        Card {
-            title: "Système et Home Manager"
-            Repeater {
-                model: [ { key: "system", label: "Système" }, { key: "home", label: "Home Manager" } ]
+        Repeater {
+            model: [ { key: "system", label: "Modifications du système NixOS" },
+                     { key: "home", label: "Modifications de Home Manager" } ]
+            Card {
+                id: partCard
+                required property var modelData
+                readonly property var st: page.apply[modelData.key] || {}
+                Layout.fillWidth: true
+                title: modelData.label
+
                 RowLayout {
-                    required property var modelData
-                    readonly property var st: page.apply[modelData.key] || {}
                     Label {
-                        text: st.changed === true ? "●" : st.changed === false ? "✓" : "?"
-                        color: st.changed === true ? Kirigami.Theme.neutralTextColor
-                             : st.changed === false ? Kirigami.Theme.positiveTextColor
+                        text: partCard.st.changed === true ? "●" : partCard.st.changed === false ? "✓" : "?"
+                        color: partCard.st.changed === true ? Kirigami.Theme.neutralTextColor
+                             : partCard.st.changed === false ? Kirigami.Theme.positiveTextColor
                              : Kirigami.Theme.disabledTextColor
                         font.bold: true
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: modelData.label + " : " + (st.changed === true ? "la config diffère de la génération installée"
-                              : st.changed === false ? "à jour" : (page.pending.time ? "évaluation en échec" : "pas encore vérifié"))
+                        text: partCard.st.changed === true ? "La config diffère de la génération installée : « Appliquer » la reconstruira."
+                              : partCard.st.changed === false ? "À jour : « Appliquer » sautera cette partie."
+                              : (page.pending.time ? "Évaluation en échec." : "Pas encore vérifié.")
+                        wrapMode: Text.WordWrap
                     }
                 }
-            }
 
-            // Pourquoi : ce qui a changé depuis la dernière application.
-            Label {
-                visible: (page.apply.commits || []).length > 0
-                Layout.topMargin: Kirigami.Units.smallSpacing
-                text: "Commits depuis la dernière application"
-                font.bold: true
-            }
-            Repeater {
-                model: page.apply.commits || []
+                // Pourquoi : ce qui a changé depuis la dernière application.
                 Label {
-                    required property var modelData
-                    text: modelData.hash + "  " + modelData.subject
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                    font.family: Kirigami.Theme.fixedWidthFont.family
+                    visible: (partCard.st.commits || []).length > 0
+                    Layout.topMargin: Kirigami.Units.smallSpacing
+                    text: "Commits depuis la dernière application"
+                    font.bold: true
                 }
-            }
-            Label {
-                visible: (page.apply.dirty || []).length > 0
-                Layout.topMargin: Kirigami.Units.smallSpacing
-                text: "Fichiers modifiés non committés"
-                font.bold: true
-            }
-            Repeater {
-                model: page.apply.dirty || []
-                Label {
-                    required property var modelData
-                    text: modelData
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                    font.family: Kirigami.Theme.fixedWidthFont.family
-                }
-            }
-            Label {
-                visible: (page.apply.inputs || []).length > 0
-                Layout.topMargin: Kirigami.Units.smallSpacing
-                text: "Entrées du flake.lock pas encore installées"
-                font.bold: true
-            }
-            Repeater {
-                model: page.apply.inputs || []
-                RowLayout {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    Label { text: modelData.name }
+                Repeater {
+                    model: partCard.st.commits || []
                     Label {
+                        required property var modelData
+                        text: modelData.hash + "  " + modelData.subject
+                        elide: Text.ElideRight
                         Layout.fillWidth: true
-                        opacity: 0.8
-                        text: (modelData.from ? page.shortDate(modelData.from.date) : "nouvelle") + " → " + page.shortDate(modelData.to.date)
-                    }
-                    Kirigami.UrlButton {
-                        visible: url.length > 0
-                        url: page.compareUrl(modelData)
-                        text: "Changements"
+                        font.family: Kirigami.Theme.fixedWidthFont.family
                     }
                 }
-            }
-        }
-
-        Card {
-            visible: !!(page.apply.system && page.apply.system.diff) || !!(page.apply.home && page.apply.home.diff)
-            title: "Paquets qui changent"
-            subtitle: "construits par la préparation"
-            Label { visible: !!(page.apply.system && page.apply.system.diff); text: "Système"; font.bold: true }
-            MonoText {
-                visible: !!(page.apply.system && page.apply.system.diff)
-                Layout.preferredHeight: Kirigami.Units.gridUnit * 10
-                text: page.apply.system ? page.apply.system.diff : ""
-            }
-            Label { visible: !!(page.apply.home && page.apply.home.diff); text: "Home Manager"; font.bold: true }
-            MonoText {
-                visible: !!(page.apply.home && page.apply.home.diff)
-                Layout.preferredHeight: Kirigami.Units.gridUnit * 8
-                text: page.apply.home ? page.apply.home.diff : ""
+                Label {
+                    visible: (partCard.st.dirty || []).length > 0
+                    Layout.topMargin: Kirigami.Units.smallSpacing
+                    text: "Fichiers modifiés non committés"
+                    font.bold: true
+                }
+                Repeater {
+                    model: partCard.st.dirty || []
+                    Label {
+                        required property var modelData
+                        text: modelData.trim()
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        font.family: Kirigami.Theme.fixedWidthFont.family
+                    }
+                }
+                Label {
+                    visible: (partCard.st.inputs || []).length > 0
+                    Layout.topMargin: Kirigami.Units.smallSpacing
+                    text: "Entrées du flake.lock pas encore installées"
+                    font.bold: true
+                }
+                Repeater {
+                    model: partCard.st.inputs || []
+                    RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Label { text: modelData.name }
+                        Label {
+                            Layout.fillWidth: true
+                            opacity: 0.8
+                            text: (modelData.from ? page.shortDate(modelData.from.date) : "nouvelle") + " → " + page.shortDate(modelData.to.date)
+                        }
+                        Kirigami.UrlButton {
+                            visible: url.length > 0
+                            url: page.compareUrl(modelData)
+                            text: "Changements"
+                        }
+                    }
+                }
+                Label {
+                    visible: !!partCard.st.diff
+                    Layout.topMargin: Kirigami.Units.smallSpacing
+                    text: "Paquets qui changent (construits par la préparation)"
+                    font.bold: true
+                }
+                MonoText {
+                    visible: !!partCard.st.diff
+                    Layout.preferredHeight: Kirigami.Units.gridUnit * 9
+                    text: partCard.st.diff || ""
+                }
             }
         }
 
