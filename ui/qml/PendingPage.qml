@@ -15,6 +15,21 @@ ScrollView {
     readonly property var pre: backend.prebuild
     readonly property var result: backend.prebuildResult
 
+    // « e126e9e → 5f1c3a2  (17 nov. 09:12 → 18:40) » : commits (pas de
+    // numéro de version dans un flake.lock) et dates, sans répéter le jour.
+    function revLabel(input) {
+        const rev = r => r && r.rev ? r.rev.substring(0, 7) : "?";
+        const loc = Qt.locale("fr_FR");
+        const day = s => new Date(s * 1000).toLocaleDateString(loc, "d MMM");
+        const time = s => new Date(s * 1000).toLocaleTimeString(loc, "HH:mm");
+        if (!input.from) return "nouvelle : " + rev(input.to);
+        let dates = "";
+        if (input.from.date && input.to.date) {
+            dates = day(input.from.date) + " " + time(input.from.date) + " → "
+                + (day(input.from.date) === day(input.to.date) ? "" : day(input.to.date) + " ") + time(input.to.date);
+        }
+        return rev(input.from) + " → " + rev(input.to) + (dates ? "   (" + dates + ")" : "");
+    }
     function shortDate(secs) {
         return secs ? new Date(secs * 1000).toLocaleDateString(Qt.locale("fr_FR"), "d MMM yyyy") : "?";
     }
@@ -281,7 +296,8 @@ ScrollView {
                     Label { text: modelData.name; font.bold: true }
                     Label {
                         Layout.fillWidth: true
-                        text: (modelData.from ? page.shortDate(modelData.from.date) : "nouvelle") + " → " + page.shortDate(modelData.to.date)
+                        text: page.revLabel(modelData)
+                        font.family: Kirigami.Theme.fixedWidthFont.family
                     }
                     Kirigami.UrlButton {
                         visible: url.length > 0
@@ -323,7 +339,8 @@ ScrollView {
                     Label { text: modelData.name; font.bold: true }
                     Label {
                         Layout.fillWidth: true
-                        text: (modelData.from ? page.shortDate(modelData.from.date) : "nouvelle") + " → " + page.shortDate(modelData.to.date)
+                        text: page.revLabel(modelData)
+                        font.family: Kirigami.Theme.fixedWidthFont.family
                     }
                     Kirigami.UrlButton {
                         visible: url.length > 0
