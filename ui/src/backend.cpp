@@ -222,13 +222,13 @@ void Backend::startUpdate(const QStringList &parts) {
   emit runStarted();
 }
 
-// Dans sa propre unité : elle survit à un redémarrage de l'interface
-// (switch Home Manager).
+// La routine elle-même (même notification), dans sa propre unité : elle
+// survit à un redémarrage de l'interface (switch Home Manager).
 void Backend::checkUpdates() {
   QProcess::startDetached("systemd-run", {"--user", "--collect", "--quiet",
-                                          QStringLiteral("--unit=" APP_NAME "-check"),
+                                          QStringLiteral("--unit=" APP_NAME "-weekly-now"),
                                           "--setenv=PATH=" + qEnvironmentVariable("PATH"), m_engine,
-                                          "check"});
+                                          "weekly"});
   emit runStarted();
 }
 

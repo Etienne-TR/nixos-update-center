@@ -44,7 +44,7 @@ ScrollView {
                 text: "Chercher les mises à jour"
                 enabled: !window.running && !backend.prebuildActive
                 ToolTip.visible: hovered
-                ToolTip.text: "Comme la routine : nix flake update (commit de flake.lock, envoyé après une mise à jour réussie), puis préparation en arrière-plan."
+                ToolTip.text: "Lance la routine du mercredi : nix flake update (commit de flake.lock, envoyé après une mise à jour réussie), préparation en arrière-plan, notification."
                 onClicked: backend.checkUpdates()
             }
             Button {
