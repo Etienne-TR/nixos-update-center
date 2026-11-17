@@ -58,18 +58,8 @@ ApplicationWindow {
         }
     }
 
-    function selectedParts() {
-        const parts = [];
-        if (systemBox.checked) parts.push("--system");
-        if (homeBox.checked) parts.push("--home");
-        if (flatpakBox.checked) parts.push("--flatpak");
-        return parts;
-    }
+    function showRunTab() { tabs.currentIndex = 1; }
 
-    Connections {
-        target: backend
-        function onRunStarted() { tabs.currentIndex = 1; }
-    }
 
     // Confirmation avant une action lourde (arrêt, retour arrière).
     Dialog {
@@ -115,60 +105,8 @@ ApplicationWindow {
     }
 
     header: ToolBar {
-        contentItem: ColumnLayout {
+        contentItem: RowLayout {
             spacing: Kirigami.Units.smallSpacing
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.margins: Kirigami.Units.smallSpacing
-                ColumnLayout {
-                    spacing: 0
-                    Label {
-                        text: backend.title
-                        font.bold: true
-                        font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.4
-                    }
-                    Label {
-                        text: backend.summary
-                        opacity: 0.8
-                    }
-                }
-                Item { Layout.fillWidth: true }
-                Button {
-                    visible: !window.running
-                    icon.name: "download"
-                    text: "Mettre à jour le flake"
-                    enabled: !backend.prebuildActive
-                    ToolTip.visible: hovered
-                    ToolTip.text: "Lance la routine : nix flake update (commit de flake.lock, envoyé après une application réussie), préparation en arrière-plan, notification. Rien n'est installé."
-                    onClicked: backend.checkUpdates()
-                }
-                Button {
-                    visible: !window.running
-                    highlighted: true
-                    icon.name: "system-software-update"
-                    text: "Appliquer"
-                    enabled: window.selectedParts().length > 0
-                    ToolTip.visible: hovered
-                    ToolTip.text: "Reconstruit et active la config telle qu'elle est (parties cochées), sans toucher au flake. Une partie déjà à jour est sautée."
-                    onClicked: backend.startUpdate(window.selectedParts())
-                }
-                Button {
-                    visible: window.running
-                    icon.name: "process-stop"
-                    text: "Arrêter"
-                    onClicked: window.ask("Arrêter la mise à jour ?",
-                        "L'étape en cours est interrompue. Une activation du système déjà lancée va quand même au bout.",
-                        () => backend.stopRun())
-                }
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.leftMargin: Kirigami.Units.smallSpacing
-                enabled: !window.running
-                CheckBox { id: systemBox; text: "Système"; checked: true }
-                CheckBox { id: homeBox; text: "Home Manager"; checked: true }
-                CheckBox { id: flatpakBox; text: "Flatpak"; checked: true }
-            }
             TabBar {
                 id: tabs
                 Layout.fillWidth: true
@@ -182,6 +120,23 @@ ApplicationWindow {
                     if (currentIndex === 2) backend.refreshGenerations();
                     if (currentIndex === 3) backend.refreshRoutine();
                 }
+            }
+            Button {
+                visible: !window.running
+                highlighted: true
+                icon.name: "system-software-update"
+                text: "Tout appliquer"
+                ToolTip.visible: hovered
+                ToolTip.text: "Système, Home Manager et Flatpaks, sans toucher au flake. Une partie déjà à jour est sautée."
+                onClicked: backend.startUpdate(["--system", "--home", "--flatpak"])
+            }
+            Button {
+                visible: window.running
+                icon.name: "process-stop"
+                text: "Arrêter"
+                onClicked: window.ask("Arrêter la mise à jour ?",
+                    "L'étape en cours est interrompue. Une activation du système déjà lancée va quand même au bout.",
+                    () => backend.stopRun())
             }
         }
     }

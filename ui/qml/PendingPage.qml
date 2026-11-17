@@ -217,6 +217,7 @@ ScrollView {
                     text: "Paquets qui changent (construits par la préparation)"
                     font.bold: true
                 }
+                RunProgress { partId: partCard.modelData.key }
                 MonoText {
                     visible: !!partCard.st.diff
                     Layout.preferredHeight: Kirigami.Units.gridUnit * 9
@@ -317,6 +318,7 @@ ScrollView {
         Card {
             title: "Versions des paquets (flake)"
             subtitle: (page.upstream.inputs || []).length > 0 ? page.upstream.inputs.length + " entrée(s) avec une version plus récente" : ""
+            RunProgress { partId: "flake" }
             Label {
                 visible: (page.upstream.inputs || []).length === 0
                 Layout.fillWidth: true
@@ -359,6 +361,7 @@ ScrollView {
         Card {
             title: "Flatpaks"
             subtitle: (page.pending.flatpaks || []).length > 0 ? page.pending.flatpaks.length + " mise(s) à jour (installées par « Appliquer »)" : ""
+            RunProgress { partId: "flatpak" }
             Label {
                 visible: (page.pending.flatpaks || []).length === 0
                 text: "Aucune mise à jour Flatpak."
