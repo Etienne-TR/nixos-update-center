@@ -62,8 +62,12 @@ let
     text = subst { } ./engine.sh;
   };
 
+  # Commande principale, au nom du projet : toujours installée, utilisée
+  # par l'interface et la routine. `update` (meta.command) en est un alias,
+  # que le module NixOS peut ne pas installer (cohabitation avec un ancien
+  # `update`).
   cli = writeShellApplication {
-    name = command;
+    inherit name;
     runtimeInputs = [
       coreutils
       jq
@@ -82,6 +86,11 @@ let
     text = subst { } ./root.sh;
   };
 
+  alias = writeShellApplication {
+    name = command;
+    text = ''exec ${cli}/bin/${name} "$@"'';
+  };
+
   news = writeShellApplication {
     name = "hm-nouveautes";
     text = ''exec ${engine}/bin/${name}-engine news "$@"'';
@@ -93,9 +102,19 @@ symlinkJoin {
     engine
     cli
     root
-    news
     progress
   ];
-  passthru = { inherit engine cli root; };
-  meta.mainProgram = command;
+  # Installés par le module NixOS si command.enable : `update` et
+  # hm-nouveautes (noms que peut déjà prendre une ancienne installation).
+  passthru = {
+    inherit engine cli root;
+    commands = symlinkJoin {
+      name = "${name}-commands";
+      paths = [
+        alias
+        news
+      ];
+    };
+  };
+  meta.mainProgram = name;
 }
