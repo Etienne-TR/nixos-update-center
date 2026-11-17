@@ -1,5 +1,5 @@
-// Interface du centre de mises à jour : icône dans le tray
-// (StatusNotifierItem, via QSystemTrayIcon) et fenêtre QML (Qt Quick, style
+// Interface du centre de mises à jour : icône dans le tray pendant une
+// préparation ou une mise à jour (StatusNotifierItem, via QSystemTrayIcon) et fenêtre QML (Qt Quick, style
 // KDE : suit kdeglobals). Une seule instance : relancée, elle montre la
 // fenêtre de celle qui tourne.
 //   --hidden  démarre dans le tray seulement (service de la session)
@@ -188,12 +188,14 @@ int main(int argc, char **argv) {
     status->setText(backend.summary());
     updateAll->setEnabled(!backend.runActive());
     stopPrebuild->setVisible(backend.prebuildActive());
+    // Icône seulement pendant que quelque chose tourne (routine,
+    // préparation, mise à jour) ; sinon la fenêtre s'ouvre depuis le lanceur.
+    tray.setVisible(busy);
   };
   QObject::connect(&backend, &Backend::summaryChanged, refreshTray);
   QObject::connect(&backend, &Backend::prebuildChanged, refreshTray);
   QObject::connect(&backend, &Backend::runChanged, refreshTray);
   refreshTray();
-  tray.show();
 
   // Fenêtre ouverte ou non, gardée pour la session (XDG_RUNTIME_DIR) : après
   // une mise à jour, la nouvelle version (lancée --hidden par le service)
