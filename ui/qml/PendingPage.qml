@@ -10,6 +10,8 @@ ScrollView {
     clip: true
 
     readonly property var pending: backend.pending
+    readonly property var apply: pending.apply || {}
+    readonly property var upstream: pending.upstream || {}
     readonly property var pre: backend.prebuild
     readonly property var result: backend.prebuildResult
 
@@ -38,14 +40,6 @@ ScrollView {
                 running: visible
                 implicitHeight: Kirigami.Units.iconSizes.medium
                 implicitWidth: implicitHeight
-            }
-            Button {
-                icon.name: "system-software-update"
-                text: "Chercher les mises à jour"
-                enabled: !window.running && !backend.prebuildActive
-                ToolTip.visible: hovered
-                ToolTip.text: "Lance la routine du mercredi : nix flake update (commit de flake.lock, envoyé après une mise à jour réussie), préparation en arrière-plan, notification."
-                onClicked: backend.checkUpdates()
             }
             Button {
                 icon.name: "view-refresh"
@@ -141,23 +135,83 @@ ScrollView {
             }
         }
 
+        // ── Bloc 1 : config à appliquer (bouton « Appliquer ») ──
+        Kirigami.Heading {
+            level: 3
+            text: "À appliquer"
+            Layout.topMargin: Kirigami.Units.largeSpacing
+        }
+        Label {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            opacity: 0.7
+            text: "Ta config (commits, fichiers modifiés, flake.lock) diffère-t-elle de ce qui est installé ? Une partie à jour est sautée par « Appliquer », sans construction ni nettoyage."
+        }
+
         Card {
-            title: "Entrées du flake"
-            subtitle: (page.pending.inputs || []).length > 0 ? (page.pending.inputs.length + " changée(s) depuis le dernier switch") : ""
+            title: "Système et Home Manager"
+            Repeater {
+                model: [ { key: "system", label: "Système" }, { key: "home", label: "Home Manager" } ]
+                RowLayout {
+                    required property var modelData
+                    readonly property var st: page.apply[modelData.key] || {}
+                    Label {
+                        text: st.changed === true ? "●" : st.changed === false ? "✓" : "?"
+                        color: st.changed === true ? Kirigami.Theme.neutralTextColor
+                             : st.changed === false ? Kirigami.Theme.positiveTextColor
+                             : Kirigami.Theme.disabledTextColor
+                        font.bold: true
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: modelData.label + " : " + (st.changed === true ? "la config diffère de la génération installée"
+                              : st.changed === false ? "à jour" : (page.pending.time ? "évaluation en échec" : "pas encore vérifié"))
+                    }
+                }
+            }
+        }
+
+        Card {
+            visible: (page.apply.commits || []).length > 0 || (page.apply.dirty || []).length > 0
+            title: "Changements de la config"
+            subtitle: "depuis la dernière application du système"
+            Repeater {
+                model: page.apply.commits || []
+                Label {
+                    required property var modelData
+                    text: modelData.hash + "  " + modelData.subject
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                    font.family: Kirigami.Theme.fixedWidthFont.family
+                }
+            }
             Label {
-                visible: (page.pending.inputs || []).length === 0
-                text: "Aucune entrée n'a changé depuis le dernier switch du système."
-                opacity: 0.7
+                visible: (page.apply.dirty || []).length > 0
+                text: "Fichiers modifiés non committés :"
+                font.bold: true
             }
             Repeater {
-                model: page.pending.inputs || []
+                model: page.apply.dirty || []
+                Label {
+                    required property var modelData
+                    text: modelData
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                    font.family: Kirigami.Theme.fixedWidthFont.family
+                }
+            }
+        }
+
+        Card {
+            visible: (page.apply.inputs || []).length > 0
+            title: "Entrées du flake.lock à appliquer"
+            subtitle: page.apply.inputs ? page.apply.inputs.length + " changée(s) depuis le dernier switch" : ""
+            Repeater {
+                model: page.apply.inputs || []
                 RowLayout {
                     required property var modelData
                     Layout.fillWidth: true
-                    Label {
-                        text: modelData.name
-                        font.bold: true
-                    }
+                    Label { text: modelData.name; font.bold: true }
                     Label {
                         Layout.fillWidth: true
                         text: (modelData.from ? page.shortDate(modelData.from.date) : "nouvelle") + " → " + page.shortDate(modelData.to.date)
@@ -172,44 +226,63 @@ ScrollView {
         }
 
         Card {
-            title: "Paquets du système"
-            Label {
-                visible: !page.pending.system || !page.pending.system.diff
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                opacity: 0.7
-                text: page.pending.system && page.pending.system.built
-                      ? "La génération préparée est déjà celle du système."
-                      : "Pas encore construit : la préparation en arrière-plan affichera ici les paquets qui changent."
-            }
+            visible: !!(page.apply.system && page.apply.system.diff) || !!(page.apply.home && page.apply.home.diff)
+            title: "Paquets qui changent"
+            subtitle: "construits par la préparation"
+            Label { visible: !!(page.apply.system && page.apply.system.diff); text: "Système"; font.bold: true }
             MonoText {
-                visible: !!(page.pending.system && page.pending.system.diff)
-                Layout.preferredHeight: Kirigami.Units.gridUnit * 12
-                text: page.pending.system ? page.pending.system.diff : ""
+                visible: !!(page.apply.system && page.apply.system.diff)
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 10
+                text: page.apply.system ? page.apply.system.diff : ""
+            }
+            Label { visible: !!(page.apply.home && page.apply.home.diff); text: "Home Manager"; font.bold: true }
+            MonoText {
+                visible: !!(page.apply.home && page.apply.home.diff)
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 8
+                text: page.apply.home ? page.apply.home.diff : ""
             }
         }
 
+        // ── Bloc 2 : nouvelles versions (bouton « Mettre à jour le flake ») ──
+        Kirigami.Heading {
+            level: 3
+            text: "Nouvelles versions disponibles"
+            Layout.topMargin: Kirigami.Units.largeSpacing
+        }
+
         Card {
-            title: "Paquets de Home Manager"
+            title: "Flake"
+            subtitle: (page.upstream.inputs || []).length > 0 ? page.upstream.inputs.length + " entrée(s) avec une version plus récente" : ""
             Label {
-                visible: !page.pending.home || !page.pending.home.diff
+                visible: (page.upstream.inputs || []).length === 0
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 opacity: 0.7
-                text: page.pending.home && page.pending.home.built
-                      ? "La génération préparée est déjà celle de Home Manager."
-                      : "Pas encore construit : la préparation en arrière-plan affichera ici les paquets qui changent."
+                text: page.upstream.checked ? "Aucune nouvelle version : le flake.lock est à jour."
+                                            : "Pas encore vérifié (ou réseau indisponible)."
             }
-            MonoText {
-                visible: !!(page.pending.home && page.pending.home.diff)
-                Layout.preferredHeight: Kirigami.Units.gridUnit * 10
-                text: page.pending.home ? page.pending.home.diff : ""
+            Repeater {
+                model: page.upstream.inputs || []
+                RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Label { text: modelData.name; font.bold: true }
+                    Label {
+                        Layout.fillWidth: true
+                        text: (modelData.from ? page.shortDate(modelData.from.date) : "nouvelle") + " → " + page.shortDate(modelData.to.date)
+                    }
+                    Kirigami.UrlButton {
+                        visible: url.length > 0
+                        url: page.compareUrl(modelData)
+                        text: "Changements"
+                    }
+                }
             }
         }
 
         Card {
             title: "Flatpaks"
-            subtitle: (page.pending.flatpaks || []).length > 0 ? page.pending.flatpaks.length + " mise(s) à jour" : ""
+            subtitle: (page.pending.flatpaks || []).length > 0 ? page.pending.flatpaks.length + " mise(s) à jour (installées par « Appliquer »)" : ""
             Label {
                 visible: (page.pending.flatpaks || []).length === 0
                 text: "Aucune mise à jour Flatpak."
@@ -231,7 +304,7 @@ ScrollView {
             title: "Claude Desktop"
             Label {
                 property var c: page.pending.claudeDesktop || {}
-                text: c.available ? "Version " + c.latest + " disponible (configurée : " + c.configured + "), installée avec Home Manager."
+                text: c.available ? "Version " + c.latest + " disponible (configurée : " + c.configured + "), écrite dans la config par « Appliquer » (Home Manager)."
                                   : "À jour (" + c.configured + ")."
             }
         }
@@ -239,7 +312,7 @@ ScrollView {
         Card {
             visible: (page.pending.unpushed || []).length > 0
             title: "Commits pas encore envoyés"
-            subtitle: "envoyés après une mise à jour réussie"
+            subtitle: "envoyés après une application réussie"
             Repeater {
                 model: page.pending.unpushed || []
                 Label {

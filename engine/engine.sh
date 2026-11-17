@@ -237,6 +237,14 @@ unchanged() { # installable, génération active
   [ -e "$2" ] && [ "$(readlink -f "$2")" = "$out" ]
 }
 
+# Comme unchanged, en JSON : true (à appliquer), false, null (évaluation
+# en échec).
+differs() { # installable, génération active
+  local out
+  out=$(nix eval --raw "$1.outPath" 2>/dev/null) || { echo null && return; }
+  if [ -e "$2" ] && [ "$(readlink -f "$2")" = "$out" ]; then echo false; else echo true; fi
+}
+
 # Au moins un switch fait (nettoyage des générations ensuite).
 switched=""
 
@@ -247,6 +255,7 @@ part_system() {
     echo "Système déjà à jour : rien à construire ni à activer."
     notes+=("Système déjà à jour")
     cp -f "$flake/flake.lock" "$state/installed-system.lock"
+    git rev-parse HEAD >"$state/installed-system.rev"
     return 0
   fi
   # Un extra ne bloque jamais la mise à jour.
@@ -271,7 +280,10 @@ part_system() {
   # Le switch, même raté, peut avoir redémarré NetworkManager et
   # systemd-resolved : retour du réseau et du DNS avant la suite.
   wait_network
-  [ "$rc" -ne 0 ] || cp -f "$flake/flake.lock" "$state/installed-system.lock"
+  if [ "$rc" -eq 0 ]; then
+    cp -f "$flake/flake.lock" "$state/installed-system.lock"
+    git rev-parse HEAD >"$state/installed-system.rev"
+  fi
   return "$rc"
 }
 
@@ -362,6 +374,7 @@ part_home() {
     echo "Home Manager déjà à jour : rien à construire ni à activer."
     notes+=("Home Manager déjà à jour")
     cp -f "$flake/flake.lock" "$state/installed-home.lock"
+    git rev-parse HEAD >"$state/installed-home.rev"
     return 0
   fi
   step "Construction de Home Manager"
@@ -371,6 +384,7 @@ part_home() {
   switched=1
   home-manager switch -b home-manager-backup --flake "$flake#$hmconf" || return 1
   cp -f "$flake/flake.lock" "$state/installed-home.lock"
+  git rev-parse HEAD >"$state/installed-home.rev"
   # Nouveautés Home Manager : ids de la génération d'avant comparés à ceux
   # de la nouvelle ; les nouvelles (pertinentes) sont gardées pour `news`.
   if [ -n "$old_ids" ] && [ -e "$news_installed" ]; then
@@ -651,26 +665,9 @@ cmd_boost() {
 
 # ─────────────────────────── pending ───────────────────────────
 
-# Ce qui attend d'être installé : entrées du flake changées depuis le
-# dernier switch système, différences de paquets (nvd) si la préparation a
-# construit les nouvelles générations, Flatpaks, Claude Desktop, commits pas
-# encore envoyés. Écrit pending.json et l'affiche.
-cmd_pending() {
-  local repo rel base cur tmp inputs system_diff="" home_diff="" built_sys built_home
-  local flatpaks="[]" claude="null" unpushed="[]" out rc
-  mkdir -p "$state"
-  tmp=$(mktemp -d)
-  repo=$(git -C "$flake" rev-parse --show-toplevel)
-  rel=$(realpath --relative-to="$repo" "$flake/flake.lock")
-  cur="$flake/flake.lock"
-  base="$state/installed-system.lock"
-  if [ ! -e "$base" ]; then
-    # Pas encore de switch par ce moteur : flake.lock du dernier envoi
-    # (poussé seulement après un switch réussi).
-    base="$tmp/base.lock"
-    git -C "$repo" show "@{u}:$rel" >"$base" 2>/dev/null || cp "$cur" "$base"
-  fi
-  inputs=$(jq -n --slurpfile a "$base" --slurpfile b "$cur" '
+# Entrées du flake qui diffèrent entre deux flake.lock (JSON).
+lock_diff() { # ancien, nouveau
+  jq -n --slurpfile a "$1" --slurpfile b "$2" '
     ($a[0]) as $A | ($b[0]) as $B
     | [ $B.nodes.root.inputs | to_entries[] | select(.value | type == "string")
         | .key as $name
@@ -682,9 +679,52 @@ cmd_pending() {
         | { name,
             from: (if .from then {rev: (.from.rev // null), date: (.from.lastModified // null)} else null end),
             to: {rev: (.to.rev // null), date: (.to.lastModified // null),
-                 owner: (.to.owner // null), repo: (.to.repo // null), type: (.to.type // null)} } ]')
+                 owner: (.to.owner // null), repo: (.to.repo // null), type: (.to.type // null)} } ]'
+}
 
-  # Différences de paquets, si la préparation a construit cette version.
+# Ce qui attend, en trois tests séparés :
+# - config système à appliquer : le système évalué diffère de la génération
+#   active (changement de la config ou du flake.lock déjà committé) ;
+# - config Home Manager à appliquer : idem pour Home Manager ;
+# - nouvelles versions proposées par le flake : nix flake update à blanc
+#   (--output-lock-file, flake.lock inchangé).
+# Plus le détail : commits et fichiers modifiés depuis la dernière
+# application, entrées du flake.lock changées, paquets qui changent (nvd, si
+# la préparation a construit), Flatpaks, Claude Desktop, commits non envoyés.
+# Écrit pending.json et l'affiche.
+cmd_pending() {
+  local repo rel dir base cur tmp rev
+  local sys_changed=null home_changed=null applied="[]" upstream="[]" upstream_ok=false
+  local system_diff="" home_diff="" built_sys built_home commits="[]" dirty="[]"
+  local flatpaks="[]" claude="null" unpushed="[]" out rc
+  mkdir -p "$state"
+  tmp=$(mktemp -d)
+  repo=$(git -C "$flake" rev-parse --show-toplevel)
+  rel=$(realpath --relative-to="$repo" "$flake/flake.lock")
+  dir=$(realpath --relative-to="$repo" "$flake")
+  cur="$flake/flake.lock"
+
+  # 1 et 2 : évaluation seule, comparée aux générations actives.
+  sys_changed=$(differs "$flake#nixosConfigurations.$host.config.system.build.toplevel" /run/current-system)
+  home_changed=$(differs "$flake#homeConfigurations.$hmconf.activationPackage" \
+    "$HOME/.local/state/nix/profiles/home-manager")
+
+  # Détail de ce qui est à appliquer : entrées du flake.lock changées depuis
+  # le dernier switch du système, commits et fichiers modifiés depuis.
+  base="$state/installed-system.lock"
+  if [ ! -e "$base" ]; then
+    base="$tmp/base.lock"
+    git -C "$repo" show "@{u}:$rel" >"$base" 2>/dev/null || cp "$cur" "$base"
+  fi
+  applied=$(lock_diff "$base" "$cur")
+  rev=$(cat "$state/installed-system.rev" 2>/dev/null || git -C "$repo" rev-parse '@{u}' 2>/dev/null || true)
+  if [ -n "$rev" ]; then
+    commits=$(git -C "$repo" log --format='%h%x09%s' "$rev..HEAD" -- "$dir" 2>/dev/null |
+      jq -R 'split("\t") | {hash: .[0], subject: .[1]}' | jq -s . || echo "[]")
+  fi
+  dirty=$(git -C "$repo" status --porcelain -- "$dir" 2>/dev/null | jq -R . | jq -s . || echo "[]")
+
+  # Paquets qui changent, si la préparation a construit cette version.
   built_sys=$(jq -r '.paths.system // empty' "$prebuild_result" 2>/dev/null || true)
   built_home=$(jq -r '.paths.home // empty' "$prebuild_result" 2>/dev/null || true)
   if [ -n "$built_sys" ] && [ -e "$built_sys" ] && [ "$(readlink -f /run/current-system)" != "$built_sys" ]; then
@@ -694,6 +734,12 @@ cmd_pending() {
   if [ -n "$built_home" ] && [ -e "$built_home" ] && [ -e "$hm_profile" ] &&
     [ "$(readlink -f "$hm_profile")" != "$built_home" ]; then
     home_diff=$(nvd --color never diff "$hm_profile" "$built_home" 2>/dev/null || true)
+  fi
+
+  # 3 : nouvelles versions proposées par le flake, sans toucher flake.lock.
+  if (cd "$flake" && nix flake update --output-lock-file "$tmp/new.lock" >/dev/null 2>&1); then
+    upstream=$(lock_diff "$cur" "$tmp/new.lock")
+    upstream_ok=true
   fi
 
   if [ "$(cfg .flatpak)" = true ]; then
@@ -715,13 +761,19 @@ cmd_pending() {
   unpushed=$(git -C "$repo" log --format='%h%x09%s' '@{u}..' 2>/dev/null |
     jq -R 'split("\t") | {hash: .[0], subject: .[1]}' | jq -s . || echo "[]")
 
-  jq -n --argjson time "$(now)" --argjson inputs "$inputs" \
-    --arg sys "$system_diff" --arg home "$home_diff" --argjson flatpaks "$flatpaks" \
-    --argjson claude "$claude" --argjson unpushed "$unpushed" \
-    --arg sysb "$built_sys" --arg homeb "$built_home" '
-    { time: $time, inputs: $inputs,
-      system: {built: ($sysb != ""), diff: $sys},
-      home: {built: ($homeb != ""), diff: $home},
+  jq -n --argjson time "$(now)" \
+    --argjson sysc "$sys_changed" --argjson homec "$home_changed" \
+    --argjson applied "$applied" --argjson commits "$commits" --argjson dirty "$dirty" \
+    --arg sys "$system_diff" --arg home "$home_diff" \
+    --arg sysb "$built_sys" --arg homeb "$built_home" \
+    --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
+    --argjson flatpaks "$flatpaks" --argjson claude "$claude" --argjson unpushed "$unpushed" '
+    { time: $time,
+      apply: {
+        system: {changed: $sysc, built: ($sysb != ""), diff: $sys},
+        home: {changed: $homec, built: ($homeb != ""), diff: $home},
+        inputs: $applied, commits: $commits, dirty: $dirty },
+      upstream: {checked: $upok, inputs: $upstream},
       flatpaks: $flatpaks, claudeDesktop: $claude, unpushed: $unpushed }' |
     tee "$state/pending.json.tmp"
   mv -f "$state/pending.json.tmp" "$state/pending.json"

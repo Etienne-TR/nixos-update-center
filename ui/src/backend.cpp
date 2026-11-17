@@ -159,8 +159,15 @@ void Backend::readPending() {
   emit pendingChanged();
 }
 
+// Éléments en attente : parties dont la config est à appliquer, nouvelles
+// versions du flake, Flatpaks, Claude Desktop.
 int Backend::pendingCount() const {
-  int n = m_pending.value("inputs").toList().size() + m_pending.value("flatpaks").toList().size();
+  const QVariantMap apply = m_pending.value("apply").toMap();
+  int n = 0;
+  if (apply.value("system").toMap().value("changed").toBool()) ++n;
+  if (apply.value("home").toMap().value("changed").toBool()) ++n;
+  n += m_pending.value("upstream").toMap().value("inputs").toList().size();
+  n += m_pending.value("flatpaks").toList().size();
   if (m_pending.value("claudeDesktop").toMap().value("available").toBool()) ++n;
   return n;
 }
@@ -185,9 +192,11 @@ void Backend::readHistory() {
 
 // Préparation terminée et quelque chose à installer.
 bool Backend::updateReady() const {
+  const QVariantMap apply = m_pending.value("apply").toMap();
   return m_prebuildResult.value("state").toString() == "success" &&
-         (m_pending.value("system").toMap().value("diff").toString().size() > 0 ||
-          m_pending.value("home").toMap().value("diff").toString().size() > 0 || pendingCount() > 0);
+         (apply.value("system").toMap().value("changed").toBool() ||
+          apply.value("home").toMap().value("changed").toBool() ||
+          !m_pending.value("flatpaks").toList().isEmpty());
 }
 
 void Backend::updateSummary() {
@@ -215,7 +224,7 @@ void Backend::updateSummary() {
   } else if (updateReady()) {
     summary = "Mise à jour prête à installer";
   } else if (pendingCount() > 0) {
-    summary = QString("%1 mise(s) à jour en attente").arg(pendingCount());
+    summary = QString("%1 élément(s) en attente").arg(pendingCount());
   } else {
     summary = "À jour";
   }

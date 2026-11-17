@@ -51,7 +51,6 @@ ApplicationWindow {
 
     function selectedParts() {
         const parts = [];
-        if (flakeBox.checked) parts.push("--flake");
         if (systemBox.checked) parts.push("--system");
         if (homeBox.checked) parts.push("--home");
         if (flatpakBox.checked) parts.push("--flatpak");
@@ -127,11 +126,21 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
                 Button {
                     visible: !window.running
+                    icon.name: "download"
+                    text: "Mettre à jour le flake"
+                    enabled: !backend.prebuildActive
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Lance la routine : nix flake update (commit de flake.lock, envoyé après une application réussie), préparation en arrière-plan, notification. Rien n'est installé."
+                    onClicked: backend.checkUpdates()
+                }
+                Button {
+                    visible: !window.running
                     highlighted: true
                     icon.name: "system-software-update"
-                    text: systemBox.checked && homeBox.checked && flatpakBox.checked
-                          ? "Tout mettre à jour" : "Mettre à jour la sélection"
+                    text: "Appliquer"
                     enabled: window.selectedParts().length > 0
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Reconstruit et active la config telle qu'elle est (parties cochées), sans toucher au flake. Une partie déjà à jour est sautée."
                     onClicked: backend.startUpdate(window.selectedParts())
                 }
                 Button {
@@ -150,7 +159,6 @@ ApplicationWindow {
                 CheckBox { id: systemBox; text: "Système"; checked: true }
                 CheckBox { id: homeBox; text: "Home Manager"; checked: true }
                 CheckBox { id: flatpakBox; text: "Flatpak"; checked: true }
-                CheckBox { id: flakeBox; text: "Flake d'abord (nix flake update)"; checked: false }
             }
             TabBar {
                 id: tabs
