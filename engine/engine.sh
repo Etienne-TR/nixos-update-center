@@ -229,8 +229,26 @@ wait_network() {
   done
 }
 
+# Rien à installer ? Comparaison du chemin évalué (sans rien construire,
+# quelques secondes) avec la génération active. Code 0 si identiques.
+unchanged() { # installable, génération active
+  local out
+  out=$(nix eval --raw "$1.outPath" 2>/dev/null) || return 1
+  [ -e "$2" ] && [ "$(readlink -f "$2")" = "$out" ]
+}
+
+# Au moins un switch fait (nettoyage des générations ensuite).
+switched=""
+
 part_system() {
   local rc=0 name attr patch marker
+  step "Évaluation du système"
+  if unchanged "$flake#nixosConfigurations.$host.config.system.build.toplevel" /run/current-system; then
+    echo "Système déjà à jour : rien à construire ni à activer."
+    notes+=("Système déjà à jour")
+    cp -f "$flake/flake.lock" "$state/installed-system.lock"
+    return 0
+  fi
   # Un extra ne bloque jamais la mise à jour.
   while IFS=$'\t' read -r -u 3 name attr patch marker; do
     [ -n "$name" ] || continue
@@ -249,6 +267,7 @@ part_system() {
   step "Switch du système"
   echo "Activation de $sys…"
   sudo "$root_helper" switch-to "$sys" || rc=1
+  switched=1
   # Le switch, même raté, peut avoir redémarré NetworkManager et
   # systemd-resolved : retour du réseau et du DNS avant la suite.
   wait_network
@@ -337,10 +356,19 @@ part_home() {
   fi
   old_ids=$(jq -r '.entries[].id' "$news_installed" 2>/dev/null || true)
   [ "$(cfg .extras.voxtype)" != true ] || voxtype_models
+  step "Évaluation de Home Manager"
+  if unchanged "$flake#homeConfigurations.$hmconf.activationPackage" \
+    "$HOME/.local/state/nix/profiles/home-manager"; then
+    echo "Home Manager déjà à jour : rien à construire ni à activer."
+    notes+=("Home Manager déjà à jour")
+    cp -f "$flake/flake.lock" "$state/installed-home.lock"
+    return 0
+  fi
   step "Construction de Home Manager"
   build_with_progress "$state/build-status.json" \
     "$flake#homeConfigurations.$hmconf.activationPackage" >/dev/null || return 1
   step "Switch de Home Manager"
+  switched=1
   home-manager switch -b home-manager-backup --flake "$flake#$hmconf" || return 1
   cp -f "$flake/flake.lock" "$state/installed-home.lock"
   # Nouveautés Home Manager : ids de la génération d'avant comparés à ceux
@@ -479,7 +507,7 @@ cmd_run() {
   fi
 
   # Seul nettoyage des anciennes générations, si au moins un switch a réussi.
-  if [ -n "$switch_ok" ] && [ "$(cfg .clean.enable)" = true ]; then
+  if [ -n "$switch_ok" ] && [ -n "$switched" ] && [ "$(cfg .clean.enable)" = true ]; then
     printf '\n\n%s=== %s ===%s\n' "$bold" "Nettoyage des anciennes générations" "$reset"
     step "Nettoyage des anciennes générations"
     sudo "$root_helper" clean || echo "Nettoyage en échec."
