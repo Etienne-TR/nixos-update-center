@@ -682,25 +682,32 @@ lock_diff() { # ancien, nouveau
                  owner: (.to.owner // null), repo: (.to.repo // null), type: (.to.type // null)} } ]'
 }
 
-# Changements depuis la dernière application d'une partie (system ou home),
+# Changements depuis la dernière application d'une partie (system, home ou
+# flake pour flake.nix),
 # en JSON : {commits: [{hash, subject}], dirty: ["M chemin"], inputs: […]}.
 # commits et dirty : modifications de la config (sans flake.lock) ; inputs :
 # entrées du flake.lock pas encore installées pour cette partie.
 changes() { # partie, dépôt, flake.lock relatif au dépôt, flake relatif, flake.lock, tmp
-  local part="$1" repo="$2" rel="$3" dir="$4" cur="$5" tmp="$6" rev lock prefixes
+  local part="$1" repo="$2" rel="$3" dir="$4" cur="$5" tmp="$6" rev lock prefixes base="$1"
+  # « flake » : modifications de flake.nix, depuis la dernière application
+  # du système.
+  [ "$part" != flake ] || base=system
   prefixes=$(jq -c --arg p "$part" '.paths[$p] // []' "$CONFIG")
   # Fichier (relatif au flake) concerné par cette partie : dans un de ses
   # dossiers, ou hors des dossiers de toutes les parties.
   # shellcheck disable=SC2016 # expression jq
-  # flake.lock à part : versions des paquets, pas modification de la config.
-  local relevant='(. != "flake.lock") and ((. as $f | ($own | any(. as $d | $f | startswith($d + "/"))))
+  # flake.lock et flake.nix à part (section du flake) : versions et entrées
+  # du flake, pas modification de la config du système ou de Home Manager.
+  local relevant='(. != "flake.lock") and (. != "flake.nix") and ((. as $f | ($own | any(. as $d | $f | startswith($d + "/"))))
     or (. as $f | ($all | any(. as $d | $f | startswith($d + "/"))) | not))'
-  lock="$state/installed-$part.lock"
+  # shellcheck disable=SC2016 # expression jq
+  [ "$part" != flake ] || relevant='(. == "flake.nix")'
+  lock="$state/installed-$base.lock"
   if [ ! -e "$lock" ]; then
-    lock="$tmp/base-$part.lock"
+    lock="$tmp/base-$base.lock"
     git -C "$repo" show "@{u}:$rel" >"$lock" 2>/dev/null || cp "$cur" "$lock"
   fi
-  rev=$(cat "$state/installed-$part.rev" 2>/dev/null || git -C "$repo" rev-parse '@{u}' 2>/dev/null || true)
+  rev=$(cat "$state/installed-$base.rev" 2>/dev/null || git -C "$repo" rev-parse '@{u}' 2>/dev/null || true)
   local all
   all=$(jq -c '[.paths[]?[]]' "$CONFIG")
   {
@@ -754,9 +761,10 @@ cmd_pending() {
   # application : commits et fichiers modifiés (rangés par dossier :
   # config.json paths.system / paths.home ; ailleurs, comme flake.nix ou
   # flake.lock : les deux), entrées du flake.lock pas encore installées.
-  local sys_changes home_changes
+  local sys_changes home_changes flake_changes
   sys_changes=$(changes system "$repo" "$rel" "$dir" "$cur" "$tmp")
   home_changes=$(changes home "$repo" "$rel" "$dir" "$cur" "$tmp")
+  flake_changes=$(changes flake "$repo" "$rel" "$dir" "$cur" "$tmp")
 
   # Paquets qui changent, si la préparation a construit cette version.
   built_sys=$(jq -r '.paths.system // empty' "$prebuild_result" 2>/dev/null || true)
@@ -797,7 +805,7 @@ cmd_pending() {
 
   jq -n --argjson time "$(now)" \
     --argjson sysc "$sys_changed" --argjson homec "$home_changed" \
-    --argjson sysch "$sys_changes" --argjson homech "$home_changes" \
+    --argjson sysch "$sys_changes" --argjson homech "$home_changes" --argjson flakech "$flake_changes" \
     --arg sys "$system_diff" --arg home "$home_diff" \
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
@@ -805,7 +813,8 @@ cmd_pending() {
     { time: $time,
       apply: {
         system: ({changed: $sysc, built: ($sysb != ""), diff: $sys} + $sysch),
-        home: ({changed: $homec, built: ($homeb != ""), diff: $home} + $homech) },
+        home: ({changed: $homec, built: ($homeb != ""), diff: $home} + $homech),
+        flake: ($flakech | {commits, dirty}) },
       upstream: {checked: $upok, inputs: $upstream},
       flatpaks: $flatpaks, claudeDesktop: $claude, unpushed: $unpushed }' |
     tee "$state/pending.json.tmp"

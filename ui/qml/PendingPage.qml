@@ -233,6 +233,29 @@ ScrollView {
         }
 
         Card {
+            id: flakeNixCard
+            readonly property var fl: page.apply.flake || {}
+            visible: (fl.commits || []).length + (fl.dirty || []).length > 0
+            title: "Modifications de flake.nix"
+            subtitle: "entrées du flake, depuis la dernière application"
+            Repeater {
+                model: flakeNixCard.fl.commits || []
+                Label {
+                    required property var modelData
+                    text: modelData.hash + "  " + modelData.subject
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                    font.family: Kirigami.Theme.fixedWidthFont.family
+                }
+            }
+            Label {
+                visible: ((page.apply.flake || {}).dirty || []).length > 0
+                text: "flake.nix modifié, non committé"
+                font.family: Kirigami.Theme.fixedWidthFont.family
+            }
+        }
+
+        Card {
             id: lockCard
             // Entrées du flake.lock déjà mises à jour, pas encore installées
             // (système ou Home Manager).
