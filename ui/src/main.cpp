@@ -21,6 +21,10 @@
 #include <QFile>
 #include <QStandardPaths>
 #include <QThread>
+#include <QDir>
+#include <QFileSystemWatcher>
+#include <QPointer>
+#include <QUrl>
 
 #include <unistd.h>
 
@@ -110,11 +114,18 @@ int main(int argc, char **argv) {
   Backend backend;
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("backend", &backend);
-  engine.loadFromModule("UpdateCenter", "Main");
+  // Mode développement (UPDATE_CENTER_QML_DIR=…/ui/qml, cf. ui/dev.sh) : le
+  // QML est lu sur le disque et la fenêtre rechargée à chaque modification.
+  const QString qmlDir = qEnvironmentVariable("UPDATE_CENTER_QML_DIR");
+  if (qmlDir.isEmpty())
+    engine.loadFromModule("UpdateCenter", "Main");
+  else
+    engine.load(QUrl::fromLocalFile(qmlDir + "/Main.qml"));
   if (engine.rootObjects().isEmpty()) return 1;
-  auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+  QPointer<QQuickWindow> window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
 
-  auto show = [window] {
+  auto show = [&window] {
+    if (!window) return;
     window->show();
     window->raise();
     window->requestActivate();
@@ -204,8 +215,8 @@ int main(int argc, char **argv) {
   const QString visibleFile = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) +
                               "/" APP_NAME "-ui-visible";
   // Rien n'est écrit pendant la relève : la fenêtre se cache en quittant.
-  auto saveVisible = [visibleFile](bool visible) {
-    if (qApp->property("takeover").toBool()) return;
+  auto saveVisible = [visibleFile, dev = !qmlDir.isEmpty()](bool visible) {
+    if (dev || qApp->property("takeover").toBool()) return;
     QFile f(visibleFile);
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(visible ? "1" : "0");
   };
@@ -214,19 +225,59 @@ int main(int argc, char **argv) {
     QFile f(visibleFile);
     if (f.open(QIODevice::ReadOnly)) wasVisible = f.readAll().trimmed() == "1";
   }
-  QObject::connect(window, &QWindow::visibleChanged, saveVisible);
+  QObject::connect(window.data(), &QWindow::visibleChanged, saveVisible);
   // « Quitter » : pas de réouverture de la fenêtre au prochain lancement.
   QObject::connect(&app, &QApplication::aboutToQuit, [&] {
     saveVisible(false);
   });
   if (!hidden || wasVisible) show();
 
+  QFileSystemWatcher watcher;
+  QTimer reloadTimer;
+  if (!qmlDir.isEmpty()) {
+    auto title = [&window] {
+      if (window) window->setTitle(window->title() + " (développement)");
+    };
+    title();
+    auto watchFiles = [&watcher, qmlDir] {
+      watcher.addPath(qmlDir);
+      for (const QString &f : QDir(qmlDir).entryList({"*.qml"}, QDir::Files))
+        watcher.addPath(qmlDir + "/" + f);
+    };
+    watchFiles();
+    reloadTimer.setSingleShot(true);
+    reloadTimer.setInterval(250);
+    // Nouvelle fenêtre chargée d'abord ; l'ancienne n'est retirée que si le
+    // QML se charge (sinon les erreurs s'affichent et elle reste).
+    QObject::connect(&reloadTimer, &QTimer::timeout, [&, watchFiles, title] {
+      watchFiles();
+      const QList<QObject *> old = engine.rootObjects();
+      const bool vis = window && window->isVisible();
+      const QRect geometry = window ? window->geometry() : QRect();
+      engine.clearComponentCache();
+      engine.load(QUrl::fromLocalFile(qmlDir + "/Main.qml"));
+      if (engine.rootObjects().size() <= old.size()) {
+        qWarning("QML en erreur : fenêtre précédente gardée.");
+        return;
+      }
+      for (QObject *o : old) o->deleteLater();
+      window = qobject_cast<QQuickWindow *>(engine.rootObjects().last());
+      if (!window) return;
+      title();
+      if (geometry.isValid()) window->setGeometry(geometry);
+      if (vis) show();
+      qInfo("QML rechargé.");
+    });
+    QObject::connect(&watcher, &QFileSystemWatcher::fileChanged, &reloadTimer, qOverload<>(&QTimer::start));
+    QObject::connect(&watcher, &QFileSystemWatcher::directoryChanged, &reloadTimer, qOverload<>(&QTimer::start));
+  }
+
   // Capture de la fenêtre pour les tests (UPDATE_CENTER_SCREENSHOT=fichier
   // [page], avec QT_QPA_PLATFORM=offscreen), puis sortie.
   const QString shot = qEnvironmentVariable("UPDATE_CENTER_SCREENSHOT");
   if (!shot.isEmpty()) {
     window->setProperty("testTab", qEnvironmentVariableIntValue("UPDATE_CENTER_SCREENSHOT_TAB"));
-    QTimer::singleShot(2500, [window, shot] {
+    QTimer::singleShot(2500, [&window, shot] {
       window->grabWindow().save(shot);
       QCoreApplication::exit(0);
     });
