@@ -136,18 +136,6 @@ ScrollView {
         }
 
         // ── Bloc 1 : config à appliquer (bouton « Appliquer ») ──
-        Kirigami.Heading {
-            level: 3
-            text: "À appliquer"
-            Layout.topMargin: Kirigami.Units.largeSpacing
-        }
-        Label {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            opacity: 0.7
-            text: "Le système ou Home Manager diffèrent-ils de ce qui est installé (modifications de la config ou versions du flake.lock) ? Une partie à jour est sautée par « Appliquer », sans construction ni nettoyage."
-        }
-
         Repeater {
             model: [ { key: "system", label: "Modifications du système NixOS" },
                      { key: "home", label: "Modifications de Home Manager" } ]
