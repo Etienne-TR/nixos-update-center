@@ -674,7 +674,7 @@ cmd_boost() {
 # ─────────────────────────── pending ───────────────────────────
 
 # Entrées du flake qui diffèrent entre deux flake.lock (JSON).
-lock_diff() { # ancien, nouveau
+lock_diff_raw() { # ancien, nouveau
   jq -n --slurpfile a "$1" --slurpfile b "$2" '
     ($a[0]) as $A | ($b[0]) as $B
     | [ $B.nodes.root.inputs | to_entries[] | select(.value | type == "string")
@@ -687,7 +687,60 @@ lock_diff() { # ancien, nouveau
         | { name,
             from: (if .from then {rev: (.from.rev // null), date: (.from.lastModified // null)} else null end),
             to: {rev: (.to.rev // null), date: (.to.lastModified // null),
-                 owner: (.to.owner // null), repo: (.to.repo // null), type: (.to.type // null)} } ]'
+                 owner: (.to.owner // null), repo: (.to.repo // null), type: (.to.type // null),
+                 url: (.to.url // null)} } ]'
+}
+
+# Entrées du flake changées, avec ce qui parle plus qu'un commit : version du
+# paquet principal de l'entrée (packages.<système>.default.version) aux deux
+# commits, quand il y en a un, et nombre de commits entre les deux (GitHub).
+# Résultats gardés dans input-cache.json (un commit ne change pas).
+lock_diff() { # ancien, nouveau
+  local json n i type owner repo url from to sys cache fv tv commits
+  json=$(lock_diff_raw "$1" "$2")
+  n=$(jq length <<<"$json")
+  [ "$n" -gt 0 ] || { echo "$json" && return; }
+  cache="$state/input-cache.json"
+  [ -s "$cache" ] || echo '{}' >"$cache"
+  sys=$(nix eval --raw --impure --expr builtins.currentSystem 2>/dev/null || echo x86_64-linux)
+  ref() { # commit → référence de flake
+    case "$type" in
+      github) echo "github:$owner/$repo/$1" ;;
+      git) echo "git+$url?rev=$1" ;;
+    esac
+  }
+  version() { # commit → version (vide si aucune)
+    local r key v
+    r=$(ref "$1")
+    [ -n "$r" ] && [ "$1" != - ] || return 0
+    key="v:$r"
+    if v=$(jq -er --arg k "$key" '.[$k] // empty' "$cache" 2>/dev/null); then
+      echo "$v"
+      return 0
+    fi
+    v=$(timeout 120 nix eval --raw "$r#packages.$sys.default.version" 2>/dev/null || true)
+    jq --arg k "$key" --arg v "$v" '.[$k] = $v' "$cache" | write_json "$cache"
+    echo "$v"
+  }
+  for ((i = 0; i < n; i++)); do
+    IFS=$'\t' read -r type owner repo url from to < <(jq -r --argjson i "$i" \
+      '.[$i] | [.to.type // "-", .to.owner // "-", .to.repo // "-", .to.url // "-", .from.rev // "-", .to.rev // "-"] | @tsv' <<<"$json")
+    fv=$(version "$from")
+    tv=$(version "$to")
+    commits=null
+    if [ "$type" = github ] && [ "$from" != - ] && [ "$to" != - ]; then
+      local key="c:$owner/$repo/$from...$to"
+      if ! commits=$(jq -e --arg k "$key" '.[$k]' "$cache" 2>/dev/null); then
+        commits=$(curl -fsS --max-time 10 "https://api.github.com/repos/$owner/$repo/compare/$from...$to" 2>/dev/null |
+          jq '.ahead_by // null' 2>/dev/null || echo null)
+        [ -n "$commits" ] || commits=null
+        [ "$commits" = null ] || jq --arg k "$key" --argjson c "$commits" '.[$k] = $c' "$cache" | write_json "$cache"
+      fi
+    fi
+    json=$(jq --argjson i "$i" --arg fv "$fv" --arg tv "$tv" --argjson c "$commits" \
+      '.[$i] += {fromVersion: (if $fv == "" then null else $fv end), toVersion: (if $tv == "" then null else $tv end), commits: $c}' <<<"$json")
+  done
+  echo "$json"
 }
 
 # Changements depuis la dernière application d'une partie (system, home ou
@@ -800,8 +853,7 @@ cmd_pending() {
 
   if [ "$(cfg .flatpak)" = true ]; then
     flatpaks=$(flatpak remote-ls --updates --user --columns=application,name,branch 2>/dev/null |
-      jq -R 'split("\t") | select(length >= 3) | {id: .[0], name: .[1], branch: .[2]}' | jq -s . ||
-      echo "[]")
+      jq -R 'split("\t") | select(length >= 3) | {id: .[0], name: .[1], branch: .[2]}' | jq -s .)
   fi
 
   if [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
@@ -815,7 +867,7 @@ cmd_pending() {
   fi
 
   unpushed=$(git -C "$repo" log --format='%h%x09%s' '@{u}..' 2>/dev/null |
-    jq -R 'split("\t") | {hash: .[0], subject: .[1]}' | jq -s . || echo "[]")
+    jq -R 'split("\t") | {hash: .[0], subject: .[1]}' | jq -s .)
 
   jq -n --argjson time "$(now)" \
     --argjson sysc "$sys_changed" --argjson homec "$home_changed" \
@@ -824,7 +876,7 @@ cmd_pending() {
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
     --argjson flatpaks "$flatpaks" --argjson claude "$claude" --argjson unpushed "$unpushed" \
-    --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s . || echo "[]")" '
+    --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
     { time: $time,
       apply: {
         system: ({changed: $sysc, built: ($sysb != ""), diff: $sys} + $sysch),

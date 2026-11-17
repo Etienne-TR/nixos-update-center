@@ -15,20 +15,23 @@ ScrollView {
     readonly property var pre: backend.prebuild
     readonly property var result: backend.prebuildResult
 
-    // « e126e9e → 5f1c3a2  (17 nov. 09:12 → 18:40) » : commits (pas de
-    // numéro de version dans un flake.lock) et dates, sans répéter le jour.
+    // Version du paquet principal de l'entrée si elle change (« 1.2 → 1.3 »),
+    // sinon les dates ; plus le nombre de commits quand GitHub le donne.
     function revLabel(input) {
-        const rev = r => r && r.rev ? r.rev.substring(0, 7) : "?";
         const loc = Qt.locale("fr_FR");
-        const day = s => new Date(s * 1000).toLocaleDateString(loc, "d MMM");
-        const time = s => new Date(s * 1000).toLocaleTimeString(loc, "HH:mm");
-        if (!input.from) return "nouvelle : " + rev(input.to);
-        let dates = "";
-        if (input.from.date && input.to.date) {
-            dates = day(input.from.date) + " " + time(input.from.date) + " → "
-                + (day(input.from.date) === day(input.to.date) ? "" : day(input.to.date) + " ") + time(input.to.date);
+        const day = s => s ? new Date(s * 1000).toLocaleDateString(loc, "d MMM") : "?";
+        const parts = [];
+        if (!input.from)
+            parts.push("nouvelle entrée");
+        else if (input.fromVersion && input.toVersion && input.fromVersion !== input.toVersion)
+            parts.push(input.fromVersion + " → " + input.toVersion);
+        else {
+            if (input.toVersion) parts.push("version " + input.toVersion);
+            const d1 = day(input.from.date), d2 = day(input.to.date);
+            parts.push(d1 === d2 ? d2 : d1 + " → " + d2);
         }
-        return rev(input.from) + " → " + rev(input.to) + (dates ? "   (" + dates + ")" : "");
+        if (input.commits) parts.push(input.commits + " commit" + (input.commits > 1 ? "s" : ""));
+        return parts.join(" · ");
     }
     function shortDate(secs) {
         return secs ? new Date(secs * 1000).toLocaleDateString(Qt.locale("fr_FR"), "d MMM yyyy") : "?";
@@ -305,7 +308,6 @@ ScrollView {
                     Label {
                         Layout.fillWidth: true
                         text: page.revLabel(modelData)
-                        font.family: Kirigami.Theme.fixedWidthFont.family
                     }
                     Kirigami.UrlButton {
                         visible: url.length > 0
@@ -348,7 +350,6 @@ ScrollView {
                     Label {
                         Layout.fillWidth: true
                         text: page.revLabel(modelData)
-                        font.family: Kirigami.Theme.fixedWidthFont.family
                     }
                     Kirigami.UrlButton {
                         visible: url.length > 0
