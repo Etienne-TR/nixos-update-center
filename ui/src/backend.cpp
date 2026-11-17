@@ -90,7 +90,11 @@ void Backend::readRun() {
     m_run = run;
     m_build = build;
     emit runChanged();
-    if (wasActive && !active) refreshGenerations();
+    // Fin d'une mise à jour : ce qui attend n'est plus le même.
+    if (wasActive && !active) {
+      refreshGenerations();
+      refreshPending();
+    }
   }
   readLogTail();
 }
@@ -178,6 +182,13 @@ void Backend::readHistory() {
   emit historyChanged();
 }
 
+// Préparation terminée et quelque chose à installer.
+bool Backend::updateReady() const {
+  return m_prebuildResult.value("state").toString() == "success" &&
+         (m_pending.value("system").toMap().value("diff").toString().size() > 0 ||
+          m_pending.value("home").toMap().value("diff").toString().size() > 0 || pendingCount() > 0);
+}
+
 void Backend::updateSummary() {
   QString summary;
   double progress = -1;
@@ -200,10 +211,7 @@ void Backend::updateSummary() {
                   ? "Préparation : évaluation de la configuration"
                   : progress >= 0 ? QString("Préparation : %1 %").arg(int(progress * 100))
                                   : "Préparation en cours";
-  } else if (m_prebuildResult.value("state").toString() == "success" &&
-             (m_pending.value("system").toMap().value("diff").toString().size() > 0 ||
-              m_pending.value("home").toMap().value("diff").toString().size() > 0 ||
-              pendingCount() > 0)) {
+  } else if (updateReady()) {
     summary = "Mise à jour prête à installer";
   } else if (pendingCount() > 0) {
     summary = QString("%1 mise(s) à jour en attente").arg(pendingCount());

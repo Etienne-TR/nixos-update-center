@@ -52,6 +52,7 @@ class Backend : public QObject {
   double progress() const { return m_progress; }
   QString title() const;
   bool runActive() const { return m_run.value("active").toBool(); }
+  bool updateReady() const;
 
   Q_INVOKABLE void startUpdate(const QStringList &parts);
   Q_INVOKABLE void checkUpdates();

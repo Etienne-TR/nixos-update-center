@@ -189,8 +189,9 @@ int main(int argc, char **argv) {
     updateAll->setEnabled(!backend.runActive());
     stopPrebuild->setVisible(backend.prebuildActive());
     // Icône seulement pendant que quelque chose tourne (routine,
-    // préparation, mise à jour) ; sinon la fenêtre s'ouvre depuis le lanceur.
-    tray.setVisible(busy);
+    // préparation, mise à jour) ou quand une mise à jour préparée attend
+    // d'être installée ; sinon la fenêtre s'ouvre depuis le lanceur.
+    tray.setVisible(busy || backend.updateReady());
   };
   QObject::connect(&backend, &Backend::summaryChanged, refreshTray);
   QObject::connect(&backend, &Backend::prebuildChanged, refreshTray);
