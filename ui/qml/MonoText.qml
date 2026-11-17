@@ -15,7 +15,11 @@ Rectangle {
     // Vue en bas du texte (avant l'arrivée du nouveau contenu).
     property bool atEnd: true
     Layout.fillWidth: true
-    color: Kirigami.Theme.alternateBackgroundColor
+    // Fond neutre des vues (pas la couleur « alternée » du thème, teintée).
+    Kirigami.Theme.colorSet: Kirigami.Theme.View
+    Kirigami.Theme.inherit: false
+    color: Kirigami.Theme.backgroundColor
+    border.color: Qt.alpha(Kirigami.Theme.textColor, 0.15)
     radius: Kirigami.Units.cornerRadius
     clip: true
 
