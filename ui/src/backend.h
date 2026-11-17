@@ -54,6 +54,7 @@ class Backend : public QObject {
   bool runActive() const { return m_run.value("active").toBool(); }
 
   Q_INVOKABLE void startUpdate(const QStringList &parts);
+  Q_INVOKABLE void checkUpdates();
   Q_INVOKABLE void stopRun();
   Q_INVOKABLE void startPrebuild();
   Q_INVOKABLE void stopPrebuild();

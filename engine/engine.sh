@@ -9,7 +9,9 @@
 #                  @name@-prebuild)
 #   pending        calcule ce qui attend d'être installé (pending.json)
 #   generations    générations système et Home Manager, en JSON
-#   weekly         routine hebdomadaire (service utilisateur)
+#   check          chercher les mises à jour : nix flake update (commit),
+#                  puis préparation en arrière-plan
+#   weekly         routine hebdomadaire : check, puis notification
 #   news           nouveautés Home Manager du dernier switch qui en avait
 #   boost          préparation en cours : passer à pleine vitesse
 #   start-prebuild, stop-prebuild
@@ -699,34 +701,50 @@ cmd_generations() {
 
 # ─────────────────────────── weekly ───────────────────────────
 
-# Routine hebdomadaire : mise à jour du flake (commit de flake.lock, sans
-# push), puis préparation en arrière-plan dans tous les cas (Flatpaks). Si
-# flake.lock a changé, notification « Mettre à jour ».
-cmd_weekly() {
-  local before choice
+# Chercher les mises à jour (routine hebdomadaire, bouton de l'interface) :
+# mise à jour du flake dans l'unité de mise à jour (commit de flake.lock,
+# sans push), puis préparation en arrière-plan dans tous les cas (Flatpaks),
+# qui calcule à la fin ce qui attend d'être installé. Code 0 si flake.lock a
+# changé, 3 s'il est inchangé, 1 en cas d'échec.
+cmd_check() {
+  local before
+  if systemctl --user is-active --quiet "$NAME-run.service"; then
+    echo "Une mise à jour est en cours : recherche annulée."
+    return 1
+  fi
   cd "$flake" || {
     notify dialog-warning-symbolic "Mise à jour du système" "Le dossier de configuration n'a pas été trouvé."
-    exit 1
+    return 1
   }
   before=$(git rev-parse HEAD)
-  if ! "$0" run --flake; then
+  if ! "$NAME" --flake; then
     notify dialog-warning-symbolic "Mise à jour du système" "La mise à jour du flake a échoué."
-    exit 1
+    return 1
   fi
   mkdir -p "$(dirname "$pending_file")"
   touch "$pending_file"
   systemctl start "$prebuild_unit" || echo "Lancement de la préparation en arrière-plan impossible."
   if [ "$(git rev-parse HEAD)" = "$before" ]; then
     echo "flake.lock inchangé : seulement la préparation des Flatpaks."
-    exit 0
+    return 3
   fi
+}
+
+# Routine hebdomadaire : recherche, puis, si flake.lock a changé,
+# notification « Mettre à jour ».
+cmd_weekly() {
+  local rc=0 choice
+  cmd_check || rc=$?
+  [ "$rc" -eq 0 ] || exit 0
   # -t 0 : sinon noctalia retire la popup sans signal et le bouton n'existe
   # plus dans l'historique (notify-send attendrait sans fin).
   choice=$(notify software-update-available-symbolic "Mises à jour disponibles" \
     "Préparation en cours en arrière-plan. Sinon, plus tard : @command@" \
-    -t 0 -A update="Mettre à jour") || true
-  [ "$choice" = update ] || exit 0
-  open_update
+    -t 0 -A update="Mettre à jour" -A open="Détails") || true
+  case "$choice" in
+    update) open_update ;;
+    open) systemd-run --user --collect --unit="$NAME-ui-open-$(now)" "$NAME-ui" --show || true ;;
+  esac
 }
 
 # Lance la mise à jour depuis un clic : dans l'interface si elle est
@@ -796,6 +814,12 @@ case "$cmd" in
   pending) cmd_pending ;;
   generations) cmd_generations ;;
   weekly) cmd_weekly ;;
+  check)
+    rc=0
+    cmd_check || rc=$?
+    [ "$rc" -ne 3 ] || rc=0
+    exit "$rc"
+    ;;
   open-update) open_update ;;
   open-journal) open_terminal "$0" journal ;;
   journal) cmd_journal ;;

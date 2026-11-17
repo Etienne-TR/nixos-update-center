@@ -40,8 +40,18 @@ ScrollView {
                 implicitWidth: implicitHeight
             }
             Button {
+                icon.name: "system-software-update"
+                text: "Chercher les mises à jour"
+                enabled: !window.running && !backend.prebuildActive
+                ToolTip.visible: hovered
+                ToolTip.text: "Comme la routine : nix flake update (commit de flake.lock, envoyé après une mise à jour réussie), puis préparation en arrière-plan."
+                onClicked: backend.checkUpdates()
+            }
+            Button {
                 icon.name: "view-refresh"
                 text: "Vérifier"
+                ToolTip.visible: hovered
+                ToolTip.text: "Recalcule ce qui attend d'être installé, sans rien modifier."
                 enabled: !backend.pendingBusy
                 onClicked: backend.refreshPending()
             }
