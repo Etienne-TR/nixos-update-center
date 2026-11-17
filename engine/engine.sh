@@ -684,14 +684,17 @@ lock_diff() { # ancien, nouveau
 
 # Changements depuis la dernière application d'une partie (system ou home),
 # en JSON : {commits: [{hash, subject}], dirty: ["M chemin"], inputs: […]}.
+# commits et dirty : modifications de la config (sans flake.lock) ; inputs :
+# entrées du flake.lock pas encore installées pour cette partie.
 changes() { # partie, dépôt, flake.lock relatif au dépôt, flake relatif, flake.lock, tmp
   local part="$1" repo="$2" rel="$3" dir="$4" cur="$5" tmp="$6" rev lock prefixes
   prefixes=$(jq -c --arg p "$part" '.paths[$p] // []' "$CONFIG")
   # Fichier (relatif au flake) concerné par cette partie : dans un de ses
   # dossiers, ou hors des dossiers de toutes les parties.
   # shellcheck disable=SC2016 # expression jq
-  local relevant='(. as $f | ($own | any(. as $d | $f | startswith($d + "/"))))
-    or (. as $f | ($all | any(. as $d | $f | startswith($d + "/"))) | not)'
+  # flake.lock à part : versions des paquets, pas modification de la config.
+  local relevant='(. != "flake.lock") and ((. as $f | ($own | any(. as $d | $f | startswith($d + "/"))))
+    or (. as $f | ($all | any(. as $d | $f | startswith($d + "/"))) | not))'
   lock="$state/installed-$part.lock"
   if [ ! -e "$lock" ]; then
     lock="$tmp/base-$part.lock"
@@ -708,7 +711,7 @@ changes() { # partie, dépôt, flake.lock relatif au dépôt, flake relatif, fla
       split("\n@@") | map(ltrimstr("@@") | select(length > 0) | split("\n") | map(select(length > 0)))
       | map({hash: (.[0] | split("\t")[0]), subject: (.[0] | split("\t")[1:] | join("\t")),
              files: .[1:]})
-      | map(select(.files | length == 0 or any('"$relevant"')))
+      | map(select(.files | any('"$relevant"')))
       | map(del(.files))' >"$tmp/commits-$part"
   git -C "$repo" status --porcelain -- "$dir" 2>/dev/null |
     jq -R -s --argjson own "$prefixes" --argjson all "$all" --arg dir "$dir/" '

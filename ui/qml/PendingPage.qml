@@ -145,7 +145,7 @@ ScrollView {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             opacity: 0.7
-            text: "Ta config (commits, fichiers modifiés, flake.lock) diffère-t-elle de ce qui est installé ? Une partie à jour est sautée par « Appliquer », sans construction ni nettoyage."
+            text: "Le système ou Home Manager diffèrent-ils de ce qui est installé (modifications de la config ou versions du flake.lock) ? Une partie à jour est sautée par « Appliquer », sans construction ni nettoyage."
         }
 
         Repeater {
@@ -168,7 +168,10 @@ ScrollView {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: partCard.st.changed === true ? "La config diffère de la génération installée : « Appliquer » la reconstruira."
+                        text: partCard.st.changed === true
+                              ? ((partCard.st.commits || []).length + (partCard.st.dirty || []).length > 0
+                                 ? "La config diffère de la génération installée : « Appliquer » la reconstruira."
+                                 : "Différente de la génération installée (versions du flake.lock, voir plus bas) : « Appliquer » la reconstruira.")
                               : partCard.st.changed === false ? "À jour : « Appliquer » sautera cette partie."
                               : (page.pending.time ? "Évaluation en échec." : "Pas encore vérifié.")
                         wrapMode: Text.WordWrap
@@ -209,30 +212,6 @@ ScrollView {
                     }
                 }
                 Label {
-                    visible: (partCard.st.inputs || []).length > 0
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                    text: "Entrées du flake.lock pas encore installées"
-                    font.bold: true
-                }
-                Repeater {
-                    model: partCard.st.inputs || []
-                    RowLayout {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        Label { text: modelData.name }
-                        Label {
-                            Layout.fillWidth: true
-                            opacity: 0.8
-                            text: (modelData.from ? page.shortDate(modelData.from.date) : "nouvelle") + " → " + page.shortDate(modelData.to.date)
-                        }
-                        Kirigami.UrlButton {
-                            visible: url.length > 0
-                            url: page.compareUrl(modelData)
-                            text: "Changements"
-                        }
-                    }
-                }
-                Label {
                     visible: !!partCard.st.diff
                     Layout.topMargin: Kirigami.Units.smallSpacing
                     text: "Paquets qui changent (construits par la préparation)"
@@ -249,12 +228,44 @@ ScrollView {
         // ── Bloc 2 : nouvelles versions (bouton « Mettre à jour le flake ») ──
         Kirigami.Heading {
             level: 3
-            text: "Nouvelles versions disponibles"
+            text: "Versions des paquets (flake)"
             Layout.topMargin: Kirigami.Units.largeSpacing
         }
 
         Card {
-            title: "Flake"
+            id: lockCard
+            // Entrées du flake.lock déjà mises à jour, pas encore installées
+            // (système ou Home Manager).
+            readonly property var lockInputs: {
+                const seen = {}, out = [];
+                for (const i of ((page.apply.system || {}).inputs || []).concat((page.apply.home || {}).inputs || []))
+                    if (!seen[i.name]) { seen[i.name] = true; out.push(i); }
+                return out;
+            }
+            visible: lockInputs.length > 0
+            title: "Versions du flake.lock pas encore installées"
+            subtitle: "installées par « Appliquer »"
+            Repeater {
+                model: lockCard.lockInputs
+                RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Label { text: modelData.name; font.bold: true }
+                    Label {
+                        Layout.fillWidth: true
+                        text: (modelData.from ? page.shortDate(modelData.from.date) : "nouvelle") + " → " + page.shortDate(modelData.to.date)
+                    }
+                    Kirigami.UrlButton {
+                        visible: url.length > 0
+                        url: page.compareUrl(modelData)
+                        text: "Changements"
+                    }
+                }
+            }
+        }
+
+        Card {
+            title: "Nouvelles versions en ligne"
             subtitle: (page.upstream.inputs || []).length > 0 ? page.upstream.inputs.length + " entrée(s) avec une version plus récente" : ""
             Label {
                 visible: (page.upstream.inputs || []).length === 0
@@ -281,6 +292,12 @@ ScrollView {
                     }
                 }
             }
+        }
+
+        Kirigami.Heading {
+            level: 3
+            text: "Autres mises à jour"
+            Layout.topMargin: Kirigami.Units.largeSpacing
         }
 
         Card {
