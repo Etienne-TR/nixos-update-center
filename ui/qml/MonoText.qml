@@ -4,34 +4,47 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 // Texte à chasse fixe défilant (journal, différences de paquets).
-ScrollView {
+// TextEdit dans un Flickable plutôt qu'un TextArea : remplacer le texte d'un
+// TextArea remet le curseur au début et fait remonter la vue. Ici, la
+// position est gardée ; avec `follow`, la vue suit la fin du texte tant
+// qu'on y est.
+Rectangle {
     id: root
-    property alias text: area.text
-    // Suivre la fin du texte tant qu'on est en bas.
+    property alias text: edit.text
     property bool follow: false
+    // Vue en bas du texte (avant l'arrivée du nouveau contenu).
+    property bool atEnd: true
     Layout.fillWidth: true
+    color: Kirigami.Theme.alternateBackgroundColor
+    radius: Kirigami.Units.cornerRadius
     clip: true
 
-    TextArea {
-        id: area
-        readOnly: true
-        selectByMouse: true
-        wrapMode: TextEdit.NoWrap
-        font.family: Kirigami.Theme.fixedWidthFont.family
-        font.pointSize: Kirigami.Theme.fixedWidthFont.pointSize
-        background: Rectangle {
-            color: Kirigami.Theme.alternateBackgroundColor
-            radius: Kirigami.Units.cornerRadius
-        }
-        onTextChanged: {
-            if (root.follow && atEnd)
-                Qt.callLater(() => { area.cursorPosition = area.length; });
-        }
-        property bool atEnd: true
-    }
+    ScrollView {
+        anchors.fill: parent
 
-    ScrollBar.vertical.onPositionChanged: {
-        const sb = ScrollBar.vertical;
-        area.atEnd = sb.position + sb.size >= 0.98;
+        Flickable {
+            id: flick
+            contentWidth: edit.paintedWidth + 2 * edit.padding
+            contentHeight: edit.paintedHeight + 2 * edit.padding
+            boundsBehavior: Flickable.StopAtBounds
+            onContentYChanged: root.atEnd = contentY + height >= contentHeight - 8
+
+            TextEdit {
+                id: edit
+                padding: Kirigami.Units.smallSpacing
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.NoWrap
+                color: Kirigami.Theme.textColor
+                selectionColor: Kirigami.Theme.highlightColor
+                selectedTextColor: Kirigami.Theme.highlightedTextColor
+                font.family: Kirigami.Theme.fixedWidthFont.family
+                font.pointSize: Kirigami.Theme.fixedWidthFont.pointSize
+                onTextChanged: {
+                    if (root.follow && root.atEnd)
+                        Qt.callLater(() => { flick.contentY = Math.max(0, flick.contentHeight - flick.height); });
+                }
+            }
+        }
     }
 }
