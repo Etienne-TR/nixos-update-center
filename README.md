@@ -96,5 +96,5 @@ le reste lu dans `/etc/nixos-update-center/config.json`).
 `ui/dev.sh` lance une seconde interface, à côté de celle installée, qui lit le
 QML dans `ui/qml` et recharge la fenêtre à chaque modification d'un fichier
 `.qml` (en cas d'erreur, la fenêtre précédente reste et l'erreur s'affiche
-dans le terminal). Le C++ (`ui/src`) demande de relancer le script ; le
-moteur utilisé est celui du système.
+dans le terminal). Le C++ (`ui/src`) et le moteur (`engine/`) sont construits
+depuis le dépôt au lancement du script : le relancer après les avoir modifiés.
