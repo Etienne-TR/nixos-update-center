@@ -37,7 +37,7 @@ Le nom est défini à un seul endroit, `meta.nix`.
 ```nix
 # flake.nix
 inputs.nixos-update-center = {
-  url = "git+ssh://git@github.com/Etienne-TR/nixos-update-center";
+  url = "github:Etienne-TR/nixos-update-center";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 
@@ -56,6 +56,14 @@ services.nixos-update-center = {
 imports = [ inputs.nixos-update-center.homeManagerModules.default ];
 services.nixos-update-center.enable = true;
 ```
+
+### Cohabitation avec une ancienne installation
+
+Pendant une migration, `command.enable = false` n'installe ni `update` ni
+`hm-nouveautes` (la commande reste disponible sous le nom
+`nixos-update-center`) et `schedule = null` ne crée pas de routine : l'ancien
+`update` et l'ancienne routine continuent seuls, l'interface et la commande
+`nixos-update-center` s'utilisent à côté.
 
 ## Extras (désactivés par défaut)
 

@@ -56,6 +56,16 @@ in
       description = "Paquet du moteur.";
     };
 
+    command.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Installer la commande `${meta.command}` (alias de `${name}`) et
+        `hm-nouveautes`. false pour cohabiter avec une ancienne commande du
+        même nom pendant une migration : `${name}` reste disponible.
+      '';
+    };
+
     flake = lib.mkOption {
       type = lib.types.str;
       example = "/home/alice/nixos";
@@ -179,7 +189,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ engine ];
+    environment.systemPackages = [ engine ] ++ lib.optional cfg.command.enable engine.commands;
     environment.etc."${name}/config.json".text = builtins.toJSON configFile;
 
     # Actions root sans mot de passe : switch, retour arrière, nettoyage,

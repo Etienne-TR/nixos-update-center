@@ -733,7 +733,7 @@ cmd_weekly() {
 # installée, sinon dans un terminal.
 open_update() {
   if command -v "$NAME-ui" >/dev/null; then
-    @command@ --background
+    "$NAME" --background
     systemd-run --user --collect --unit="$NAME-ui-open-$(now)" "$NAME-ui" --show || true
     return
   fi
@@ -774,7 +774,7 @@ cmd_journal() {
 
 # Dans un terminal ouvert par un clic : mise à jour suivie, puis attente.
 cmd_terminal_update() {
-  @command@ || echo "La mise à jour a échoué."
+  "$NAME" || echo "La mise à jour a échoué."
   echo
   read -r -p "Entrée pour fermer. " _ || true
 }

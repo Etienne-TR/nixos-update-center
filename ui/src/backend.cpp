@@ -218,11 +218,11 @@ void Backend::updateSummary() {
 }
 
 void Backend::startUpdate(const QStringList &parts) {
-  QProcess::startDetached("update", QStringList{"--background"} + parts);
+  QProcess::startDetached(QStringLiteral(APP_NAME), QStringList{"--background"} + parts);
   emit runStarted();
 }
 
-void Backend::stopRun() { QProcess::startDetached("update", {"--stop"}); }
+void Backend::stopRun() { QProcess::startDetached(QStringLiteral(APP_NAME), {"--stop"}); }
 void Backend::startPrebuild() { engine({"start-prebuild"}); }
 void Backend::stopPrebuild() { engine({"stop-prebuild"}); }
 void Backend::boostPrebuild() { engine({"boost"}); }
