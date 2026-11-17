@@ -18,6 +18,9 @@
 #include <QQuickWindow>
 #include <QSystemTrayIcon>
 #include <QTimer>
+#include <QFile>
+#include <QStandardPaths>
+#include <QThread>
 
 #include <unistd.h>
 
@@ -73,15 +76,28 @@ int main(int argc, char **argv) {
   const QStringList args = app.arguments();
   const bool hidden = args.contains("--hidden");
 
-  // Instance unique.
-  const QString socketName = QString(APP_NAME "-ui-%1").arg(getuid());
+  // Instance unique. Une autre version déjà lancée (avant une mise à jour)
+  // se ferme et laisse la place ; la même version montre sa fenêtre.
+  const QString self = QCoreApplication::applicationFilePath();
+  const QString socketName = qEnvironmentVariableIsEmpty("UPDATE_CENTER_SOCKET")
+                                 ? QString(APP_NAME "-ui-%1").arg(getuid())
+                                 : qEnvironmentVariable("UPDATE_CENTER_SOCKET");
   {
     QLocalSocket probe;
     probe.connectToServer(socketName);
     if (probe.waitForConnected(500)) {
-      probe.write(hidden ? "noop\n" : "show\n");
+      probe.write(("hello " + self + (hidden ? " hidden" : " show") + "\n").toUtf8());
       probe.waitForBytesWritten(500);
-      return 0;
+      // Pas de réponse : ancienne version sans relève, elle garde la main.
+      if (!probe.waitForReadyRead(2000) || !probe.readAll().startsWith("bye")) return 0;
+      probe.disconnectFromServer();
+      for (int i = 0; i < 50; ++i) {
+        QLocalSocket again;
+        again.connectToServer(socketName);
+        if (!again.waitForConnected(100)) break;
+        again.disconnectFromServer();
+        QThread::msleep(100);
+      }
     }
   }
   QLocalServer::removeServer(socketName);
@@ -105,8 +121,21 @@ int main(int argc, char **argv) {
   };
   QObject::connect(&server, &QLocalServer::newConnection, [&] {
     QLocalSocket *c = server.nextPendingConnection();
-    QObject::connect(c, &QLocalSocket::readyRead, [c, show] {
-      if (c->readAll().startsWith("show")) show();
+    QObject::connect(c, &QLocalSocket::readyRead, [&, c] {
+      const QList<QByteArray> words = c->readAll().trimmed().split(' ');
+      if (words.value(0) == "hello" && QString::fromUtf8(words.value(1)) != self) {
+        // Nouvelle version : l'état de la fenêtre est déjà dans le fichier
+        // de visibilité, on part.
+        c->write("bye\n");
+        c->flush();
+        c->waitForBytesWritten(500);
+        app.setProperty("takeover", true);
+        QTimer::singleShot(0, &app, [] { QCoreApplication::exit(0); });
+        return;
+      }
+      if (words.value(0) == "show" || words.value(2) == "show") show();
+      c->write("same\n");
+      c->flush();
       c->deleteLater();
     });
   });
@@ -125,8 +154,10 @@ int main(int argc, char **argv) {
   QAction *stopPrebuild = menu.addAction(QIcon::fromTheme("process-stop"), "Arrêter la préparation");
   QObject::connect(stopPrebuild, &QAction::triggered, &backend, &Backend::stopPrebuild);
   menu.addSeparator();
+  // exit() et non quit() : quit() demande d'abord la fermeture des fenêtres,
+  // que la fenêtre refuse (elle se cache).
   QObject::connect(menu.addAction(QIcon::fromTheme("application-exit"), "Quitter"), &QAction::triggered,
-                   &app, &QApplication::quit);
+                   &app, [] { QCoreApplication::exit(0); });
   tray.setContextMenu(&menu);
   QObject::connect(&tray, &QSystemTrayIcon::activated, [&](QSystemTrayIcon::ActivationReason r) {
     if (r != QSystemTrayIcon::Trigger) return;
@@ -164,7 +195,28 @@ int main(int argc, char **argv) {
   refreshTray();
   tray.show();
 
-  if (!hidden) show();
+  // Fenêtre ouverte ou non, gardée pour la session (XDG_RUNTIME_DIR) : après
+  // une mise à jour, la nouvelle version (lancée --hidden par le service)
+  // rouvre la fenêtre seulement si elle était ouverte.
+  const QString visibleFile = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) +
+                              "/" APP_NAME "-ui-visible";
+  // Rien n'est écrit pendant la relève : la fenêtre se cache en quittant.
+  auto saveVisible = [visibleFile](bool visible) {
+    if (qApp->property("takeover").toBool()) return;
+    QFile f(visibleFile);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(visible ? "1" : "0");
+  };
+  bool wasVisible = false;
+  {
+    QFile f(visibleFile);
+    if (f.open(QIODevice::ReadOnly)) wasVisible = f.readAll().trimmed() == "1";
+  }
+  QObject::connect(window, &QWindow::visibleChanged, saveVisible);
+  // « Quitter » : pas de réouverture de la fenêtre au prochain lancement.
+  QObject::connect(&app, &QApplication::aboutToQuit, [&] {
+    saveVisible(false);
+  });
+  if (!hidden || wasVisible) show();
 
   // Capture de la fenêtre pour les tests (UPDATE_CENTER_SCREENSHOT=fichier
   // [page], avec QT_QPA_PLATFORM=offscreen), puis sortie.
@@ -173,7 +225,7 @@ int main(int argc, char **argv) {
     window->setProperty("testTab", qEnvironmentVariableIntValue("UPDATE_CENTER_SCREENSHOT_TAB"));
     QTimer::singleShot(2500, [window, shot] {
       window->grabWindow().save(shot);
-      QApplication::quit();
+      QCoreApplication::exit(0);
     });
   }
   return app.exec();
