@@ -89,11 +89,15 @@ void Backend::readRun() {
   const QVariantMap build = active ? readJson(m_state + "/build-status.json") : QVariantMap();
   if (run != m_run || build != m_build) {
     const bool wasActive = runActive();
+    // Fin d'une exécution, même si elle a été trop courte pour être vue en
+    // cours (mise à jour d'une seule entrée du flake) : nouvelle date de fin.
+    const bool newlyFinished = !active && !run.value("finished").isNull() &&
+                               run.value("finished") != m_run.value("finished") && !m_run.isEmpty();
     m_run = run;
     m_build = build;
     emit runChanged();
     // Fin d'une mise à jour : ce qui attend n'est plus le même.
-    if (wasActive && !active) {
+    if ((wasActive && !active) || newlyFinished) {
       refreshGenerations();
       refreshPending(true);
     }
