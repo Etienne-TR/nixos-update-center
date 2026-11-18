@@ -305,6 +305,24 @@ void Backend::stopRun() { QProcess::startDetached(QStringLiteral(APP_NAME), {"--
 void Backend::startPrebuild() { engine({"start-prebuild"}); }
 void Backend::stopPrebuild() { engine({"stop-prebuild"}); }
 void Backend::boostPrebuild() { engine({"boost"}); }
+// 400 dernières lignes du journal du service de préparation.
+void Backend::refreshPrebuildLog() {
+  if (m_prebuildLogBusy) return;
+  m_prebuildLogBusy = true;
+  auto *p = new QProcess(this);
+  connect(p, &QProcess::finished, this, [this, p] {
+    p->deleteLater();
+    m_prebuildLogBusy = false;
+    const QString text = QString::fromUtf8(p->readAllStandardOutput());
+    if (text != m_prebuildLog) {
+      m_prebuildLog = text;
+      emit prebuildLogChanged();
+    }
+  });
+  p->start("journalctl", {"-u", QStringLiteral(APP_NAME "-prebuild.service"), "-o", "cat", "-n", "400",
+                          "--no-pager"});
+}
+
 void Backend::openPrebuildJournal() { engine({"open-journal"}); }
 
 void Backend::rollbackSystem(int generation) {
@@ -318,6 +336,7 @@ void Backend::rollbackHome(int generation) {
 void Backend::runPending(const QStringList &args) {
   if (m_pendingBusy) return;
   m_pendingBusy = true;
+  m_pendingQuick = args.contains("--quick");
   emit pendingChanged();
   auto *p = new QProcess(this);
   connect(p, &QProcess::finished, this, [this, p] {

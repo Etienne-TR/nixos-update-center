@@ -18,6 +18,8 @@ class Backend : public QObject {
   // Avancement de la construction en cours pendant une exécution.
   Q_PROPERTY(QVariantMap build READ build NOTIFY runChanged)
   Q_PROPERTY(QString log READ log NOTIFY logChanged)
+  // Journal du service de préparation (journalctl), lu à la demande.
+  Q_PROPERTY(QString prebuildLog READ prebuildLog NOTIFY prebuildLogChanged)
   // Préparation en arrière-plan : avancement (vide si elle ne tourne pas),
   // résultat de la dernière.
   Q_PROPERTY(bool prebuildActive READ prebuildActive NOTIFY prebuildChanged)
@@ -25,6 +27,8 @@ class Backend : public QObject {
   Q_PROPERTY(QVariantMap prebuildResult READ prebuildResult NOTIFY prebuildChanged)
   Q_PROPERTY(QVariantMap pending READ pending NOTIFY pendingChanged)
   Q_PROPERTY(bool pendingBusy READ pendingBusy NOTIFY pendingChanged)
+  // Vérification en cours de type rapide (git seulement, moins d'une seconde).
+  Q_PROPERTY(bool pendingQuick READ pendingQuick NOTIFY pendingChanged)
   Q_PROPERTY(int pendingCount READ pendingCount NOTIFY pendingChanged)
   Q_PROPERTY(QVariantList history READ history NOTIFY historyChanged)
   Q_PROPERTY(QVariantMap generations READ generations NOTIFY generationsChanged)
@@ -43,11 +47,13 @@ class Backend : public QObject {
   QVariantMap run() const { return m_run; }
   QVariantMap build() const { return m_build; }
   QString log() const { return m_log; }
+  QString prebuildLog() const { return m_prebuildLog; }
   bool prebuildActive() const { return !m_prebuild.isEmpty(); }
   QVariantMap prebuild() const { return m_prebuild; }
   QVariantMap prebuildResult() const { return m_prebuildResult; }
   QVariantMap pending() const { return m_pending; }
   bool pendingBusy() const { return m_pendingBusy; }
+  bool pendingQuick() const { return m_pendingQuick; }
   int pendingCount() const;
   QVariantList history() const { return m_history; }
   QVariantMap generations() const { return m_generations; }
@@ -71,6 +77,7 @@ class Backend : public QObject {
   Q_INVOKABLE void stopPrebuild();
   Q_INVOKABLE void boostPrebuild();
   Q_INVOKABLE void openPrebuildJournal();
+  Q_INVOKABLE void refreshPrebuildLog();
   // quick : git seulement (démarrage, ouverture, toutes les 5 minutes).
   Q_INVOKABLE void refreshPending(bool quick = false);
   // Une seule partie : system, home, flake ou flatpak.
@@ -85,6 +92,7 @@ class Backend : public QObject {
  signals:
   void runChanged();
   void logChanged();
+  void prebuildLogChanged();
   void prebuildChanged();
   void pendingChanged();
   void historyChanged();
@@ -114,10 +122,13 @@ class Backend : public QObject {
   void runEngine(const QStringList &args, std::function<void(int, const QByteArray &)> done);
   QVariantMap m_run, m_build, m_prebuild, m_prebuildResult, m_pending, m_generations;
   QVariantList m_history;
+  QString m_prebuildLog;
+  bool m_prebuildLogBusy = false;
   QString m_log, m_logPath, m_news, m_summary;
   qint64 m_logPos = 0;
   double m_progress = -1;
   bool m_pendingBusy = false;
+  bool m_pendingQuick = false;
   QDateTime m_pendingMtime, m_historyMtime;
   qint64 m_prebuildSince = 0;
 };
