@@ -24,15 +24,16 @@ ScrollView {
         const lag = (a, b) => {
             if (!a || !b) return "";
             const d = Math.round((b - a) / 86400);
-            return d <= 0 ? "moins d'un jour de retard" : d === 1 ? "1 jour de retard" : d + " jours de retard";
+            return d <= 0 ? "< 1 jour" : d === 1 ? "1 jour" : d + " jours";
         };
         if (!input.from) return "nouvelle entrée" + (input.toVersion ? " · " + input.toVersion : "");
         const parts = [];
         if (input.fromVersion || input.toVersion)
             parts.push((input.fromVersion || "?") + " → " + (input.toVersion || "?"));
+        // « 936 commits (1 jour) » : nombre de commits, puis le retard.
         const l = lag(input.from.date, input.to.date);
-        if (l) parts.push(l);
-        if (input.commits) parts.push(input.commits + " commit" + (input.commits > 1 ? "s" : ""));
+        const c = input.commits ? input.commits + " commit" + (input.commits > 1 ? "s" : "") : "";
+        if (c || l) parts.push(c && l ? c + " (" + l + ")" : c || "(" + l + ")");
         return parts.join(" · ");
     }
     function shortDate(secs) {
