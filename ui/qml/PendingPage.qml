@@ -113,16 +113,25 @@ ScrollView {
                         text: "Pleine vitesse"
                         enabled: !page.pre.boosted
                         onClicked: backend.boostPrebuild()
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 500
+                        ToolTip.text: "nixos-update-center-engine boost : la préparation en cours repasse en priorité normale (sudo nixos-update-center-root boost : chrt, renice, ionice, CPUWeight/IOWeight)."
                     }
                     Button {
                         icon.name: "process-stop"
                         text: "Arrêter"
                         onClicked: backend.stopPrebuild()
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 500
+                        ToolTip.text: "nixos-update-center-engine stop-prebuild : systemctl stop nixos-update-center-prebuild, sans reprise au prochain démarrage. Ce qui est déjà construit est gardé."
                     }
                     Button {
                         icon.name: "utilities-terminal"
                         text: "Journal"
                         onClicked: backend.openPrebuildJournal()
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 500
+                        ToolTip.text: "journalctl -f -u nixos-update-center-prebuild, dans un terminal."
                     }
                 }
             }
@@ -148,6 +157,9 @@ ScrollView {
                     text: "Préparer maintenant"
                     enabled: !window.running
                     onClicked: backend.startPrebuild()
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "nixos-update-center-engine start-prebuild : systemctl start nixos-update-center-prebuild, qui construit système et Home Manager sans les activer (nix build en priorité minimale) et télécharge les Flatpaks (flatpak update --no-deploy)."
                 }
             }
         }
@@ -245,6 +257,9 @@ ScrollView {
                         text: "Appliquer les modifications"
                         enabled: !window.running && (partCard.st.changed !== false)
                         onClicked: backend.startUpdate([partCard.modelData.key === "system" ? "--system" : "--home"])
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 500
+                        ToolTip.text: (partCard.modelData.key === "system" ? "update --system : évaluation, construction de niri patché, nix build du système, sudo nixos-update-center-root switch-to (switch-to-configuration switch), push des commits, nh clean. Sautée si la génération évaluée est déjà installée." : "update --home : Claude Desktop, modèle Voxtype, évaluation, nix build de Home Manager, home-manager switch, push des commits, nh clean. Sautée si la génération évaluée est déjà installée.")
                     }
                 }
             }
@@ -282,6 +297,9 @@ ScrollView {
                     text: "Appliquer les modifications"
                     enabled: !window.running && (true)
                     onClicked: backend.startUpdate(["--system", "--home"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --system --home : système puis Home Manager, chacun sauté si sa génération évaluée est déjà installée ; push des commits, nh clean après un vrai switch."
                 }
             }
         }
@@ -324,6 +342,9 @@ ScrollView {
                     text: "Appliquer les modifications"
                     enabled: !window.running && (true)
                     onClicked: backend.startUpdate(["--system", "--home"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --system --home : système puis Home Manager, chacun sauté si sa génération évaluée est déjà installée ; push des commits, nh clean après un vrai switch."
                 }
             }
         }
@@ -366,6 +387,9 @@ ScrollView {
                     text: "Mettre à jour le flake"
                     enabled: !window.running && (!backend.prebuildActive)
                     onClicked: backend.checkUpdates()
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "nixos-update-center-engine weekly --manual (la routine) : update --flake (nix flake update, commit de flake.lock), puis préparation en arrière-plan, puis notification. Rien n'est installé."
                 }
             }
         }
@@ -398,6 +422,9 @@ ScrollView {
                     text: "Mettre à jour"
                     enabled: !window.running && ((page.pending.flatpaks || []).length > 0)
                     onClicked: backend.startUpdate(["--flatpak"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --flatpak : flatpak update --user, puis flatpak uninstall --user --unused."
                 }
             }
         }
@@ -419,6 +446,9 @@ ScrollView {
                     text: "Mettre à jour"
                     enabled: !window.running && (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available))
                     onClicked: backend.startUpdate(["--home"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --home : écrit la nouvelle version de Claude Desktop dans la config (commit), puis home-manager switch, qui la télécharge et l'installe."
                 }
             }
         }

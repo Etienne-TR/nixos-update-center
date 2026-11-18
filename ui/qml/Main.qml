@@ -129,7 +129,7 @@ ApplicationWindow {
                 icon.name: "system-software-update"
                 text: "Tout appliquer"
                 ToolTip.visible: hovered
-                ToolTip.text: "Système, Home Manager et Flatpaks, sans toucher au flake. Une partie déjà à jour est sautée."
+                ToolTip.text: "update --system --home --flatpak : système, Home Manager et Flatpaks, sans toucher au flake. Une partie dont la génération évaluée est déjà installée est sautée ; push des commits, nh clean après un vrai switch."
                 onClicked: backend.startUpdate(["--system", "--home", "--flatpak"])
             }
             Button {
