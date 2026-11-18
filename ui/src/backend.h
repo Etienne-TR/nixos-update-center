@@ -73,6 +73,8 @@ class Backend : public QObject {
   Q_INVOKABLE void openPrebuildJournal();
   // quick : git seulement (démarrage, ouverture, toutes les 5 minutes).
   Q_INVOKABLE void refreshPending(bool quick = false);
+  // Une seule partie : system, home, flake ou flatpak.
+  Q_INVOKABLE void refreshPart(const QString &part);
   Q_INVOKABLE void refreshGenerations();
   Q_INVOKABLE void rollbackSystem(int generation);
   Q_INVOKABLE void rollbackHome(int generation);
@@ -108,6 +110,7 @@ class Backend : public QObject {
   QString m_state, m_engine;
   QTimer m_timer;
   QVariantMap m_routine;
+  void runPending(const QStringList &args);
   void runEngine(const QStringList &args, std::function<void(int, const QByteArray &)> done);
   QVariantMap m_run, m_build, m_prebuild, m_prebuildResult, m_pending, m_generations;
   QVariantList m_history;

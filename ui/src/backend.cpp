@@ -315,7 +315,7 @@ void Backend::rollbackHome(int generation) {
   startUpdate({"--rollback-home", QString::number(generation)});
 }
 
-void Backend::refreshPending(bool quick) {
+void Backend::runPending(const QStringList &args) {
   if (m_pendingBusy) return;
   m_pendingBusy = true;
   emit pendingChanged();
@@ -327,8 +327,12 @@ void Backend::refreshPending(bool quick) {
     readPending();
     emit pendingChanged();
   });
-  p->start(m_engine, quick ? QStringList{"pending", "--quick"} : QStringList{"pending"});
+  p->start(m_engine, QStringList{"pending"} + args);
 }
+
+void Backend::refreshPending(bool quick) { runPending(quick ? QStringList{"--quick"} : QStringList{}); }
+
+void Backend::refreshPart(const QString &part) { runPending({"--only", part}); }
 
 void Backend::refreshGenerations() {
   auto *p = new QProcess(this);

@@ -260,6 +260,13 @@ ScrollView {
                     text: "… et " + (partCard.packages.length - 8) + " autre(s)"
                 }
                 actions: [
+                    IconAction {
+                        iconName: "view-refresh-symbolic"
+                        visible: !window.running
+                        enabled: !backend.pendingBusy
+                        tooltip: "Vérifier cette partie seulement : évaluation (environ 10 s), comparée à la génération installée. nixos-update-center-engine pending --only " + partCard.modelData.key
+                        onClicked: backend.refreshPart(partCard.modelData.key)
+                    },
                     Button {
                         icon.name: "system-software-update"
                         text: "Appliquer les modifications"
@@ -343,7 +350,7 @@ ScrollView {
 
         Card {
             title: "Mise à jour du flake"
-            bodyVisible: (page.upstream.inputs || []).length > 0 || !page.upstream.checked
+            bodyVisible: (page.upstream.inputs || []).length > 0 || !page.upstream.checked || window.running
             badge: (page.upstream.inputs || []).length > 0 ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: (page.upstream.inputs || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flake" }
@@ -365,6 +372,13 @@ ScrollView {
                 }
             }
             actions: [
+                IconAction {
+                    iconName: "view-refresh-symbolic"
+                    visible: !window.running
+                    enabled: !backend.pendingBusy
+                    tooltip: "Rechercher les nouvelles versions des entrées seulement : nix flake update à blanc, sans toucher flake.lock (quelques secondes). nixos-update-center-engine pending --only flake"
+                    onClicked: backend.refreshPart("flake")
+                },
                 Button {
                     icon.name: "download"
                     text: "Mettre à jour le flake"
@@ -381,7 +395,7 @@ ScrollView {
 
         Card {
             title: "Flatpaks"
-            bodyVisible: (page.pending.flatpaks || []).length > 0
+            bodyVisible: (page.pending.flatpaks || []).length > 0 || window.running
             badge: (page.pending.flatpaks || []).length > 0 ? "●" : "✓"
             badgeColor: (page.pending.flatpaks || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flatpak" }
@@ -395,6 +409,13 @@ ScrollView {
                 }
             }
             actions: [
+                IconAction {
+                    iconName: "view-refresh-symbolic"
+                    visible: !window.running
+                    enabled: !backend.pendingBusy
+                    tooltip: "Rechercher les mises à jour Flatpak seulement : flatpak remote-ls --updates --user. nixos-update-center-engine pending --only flatpak"
+                    onClicked: backend.refreshPart("flatpak")
+                },
                 Button {
                     icon.name: "system-software-update"
                     text: "Mettre à jour"

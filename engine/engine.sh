@@ -836,7 +836,23 @@ changes() { # partie, dépôt, flake.lock relatif au dépôt, flake relatif, fla
 # vérification complète.
 pending_quick=""
 cmd_pending() {
-  [ "${1:-}" != --quick ] || pending_quick=1
+  # Ce qui est vérifié : tout (défaut), rien d'autre que git (--quick), ou
+  # une seule partie (--only system|home|flake|flatpak) ; le reste est
+  # repris de la dernière vérification.
+  local do_sys=1 do_home=1 do_flake=1 do_flatpak=1 do_claude=1
+  case "${1:-}" in
+    --quick) pending_quick=1 do_sys="" do_home="" do_flake="" do_flatpak="" do_claude="" ;;
+    --only)
+      pending_quick=1 do_sys="" do_home="" do_flake="" do_flatpak="" do_claude=""
+      case "${2:-}" in
+        system) do_sys=1 ;;
+        home) do_home=1 do_claude=1 ;;
+        flake) do_flake=1 ;;
+        flatpak) do_flatpak=1 ;;
+        *) die "partie inconnue : ${2:-} (system, home, flake, flatpak)" ;;
+      esac
+      ;;
+  esac
   local repo rel dir cur tmp prev
   # Une seule vérification à la fois (deux fenêtres, routine…) : la suivante
   # attend la fin de la première.
@@ -863,15 +879,30 @@ cmd_pending() {
   local head dirty_hash target_sys="" target_home=""
   head=$(git -C "$repo" rev-parse HEAD)
   dirty_hash=$(git -C "$repo" status --porcelain | sha256sum | cut -d' ' -f1)
-  if [ -z "$pending_quick" ]; then
+  # Config inchangée depuis la vérification précédente : ses évaluations
+  # restent valables.
+  local same_config=""
+  [ "$(jq -r '.head // ""' "$prev")" != "$head" ] || [ "$(jq -r '.dirtyHash // ""' "$prev")" != "$dirty_hash" ] ||
+    same_config=1
+  local sys_evaluated="" home_evaluated=""
+  if [ -n "$do_sys" ]; then
     sys_changed=$(differs "$flake#nixosConfigurations.$host.config.system.build.toplevel" /run/current-system "$tmp/target-sys")
+    target_sys=$(cat "$tmp/target-sys" 2>/dev/null || true)
+    sys_evaluated=1
+  elif [ -n "$same_config" ]; then
+    target_sys=$(jq -r '.apply.system.target // ""' "$prev")
+    sys_changed=$(jq -c '.apply.system.changed' "$prev")
+    [ "$sys_changed" = null ] || sys_evaluated=1
+  fi
+  if [ -n "$do_home" ]; then
     home_changed=$(differs "$flake#homeConfigurations.$hmconf.activationPackage" \
       "$HOME/.local/state/nix/profiles/home-manager" "$tmp/target-home")
-    target_sys=$(cat "$tmp/target-sys" 2>/dev/null || true)
     target_home=$(cat "$tmp/target-home" 2>/dev/null || true)
-  elif [ "$(jq -r '.head // ""' "$prev")" = "$head" ] && [ "$(jq -r '.dirtyHash // ""' "$prev")" = "$dirty_hash" ]; then
-    target_sys=$(jq -r '.apply.system.target // ""' "$prev")
+    home_evaluated=1
+  elif [ -n "$same_config" ]; then
     target_home=$(jq -r '.apply.home.target // ""' "$prev")
+    home_changed=$(jq -c '.apply.home.changed' "$prev")
+    [ "$home_changed" = null ] || home_evaluated=1
   fi
 
   # Détail de ce qui est à appliquer, pour chaque partie depuis sa dernière
@@ -899,12 +930,15 @@ cmd_pending() {
     pkgs_home=$(packages_diff "$hm_profile" "$built_home")
   fi
 
-  if [ -n "$pending_quick" ]; then
-    # Déduit de git : quelque chose depuis la dernière application ?
-    local fl
-    fl=$(jq '(.commits | length) + (.dirty | length)' <<<"$flake_changes")
+  # Parties non évaluées : déduit de git (quelque chose depuis la dernière
+  # application ?).
+  local fl
+  fl=$(jq '(.commits | length) + (.dirty | length)' <<<"$flake_changes")
+  [ -n "$sys_evaluated" ] ||
     sys_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$sys_changes")
+  [ -n "$home_evaluated" ] ||
     home_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$home_changes")
+  if [ -n "$pending_quick" ]; then
     # Seulement celles que flake.lock n'a pas fait avancer depuis la
     # recherche complète (une entrée mise à jour seule a pu prendre une
     # révision encore plus récente : la prochaine recherche le dira).
@@ -917,17 +951,17 @@ cmd_pending() {
   fi
 
   # 3 : nouvelles versions proposées par le flake, sans toucher flake.lock.
-  if [ -z "$pending_quick" ] && (cd "$flake" && nix flake update --output-lock-file "$tmp/new.lock" >/dev/null 2>&1); then
+  if [ -n "$do_flake" ] && (cd "$flake" && nix flake update --output-lock-file "$tmp/new.lock" >/dev/null 2>&1); then
     upstream=$(lock_diff "$cur" "$tmp/new.lock")
     upstream_ok=true
   fi
 
-  if [ -z "$pending_quick" ] && [ "$(cfg .flatpak)" = true ]; then
+  if [ -n "$do_flatpak" ] && [ "$(cfg .flatpak)" = true ]; then
     flatpaks=$(flatpak remote-ls --updates --user --columns=application,name,branch 2>/dev/null |
       jq -R 'split("\t") | select(length >= 3) | {id: .[0], name: .[1], branch: .[2]}' | jq -s .)
   fi
 
-  if [ -z "$pending_quick" ] && [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
+  if [ -n "$do_claude" ] && [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
     rc=0
     out=$(claude_check) || rc=$?
     if [ "$rc" -le 1 ]; then
