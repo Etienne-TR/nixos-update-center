@@ -41,7 +41,7 @@ RowLayout {
         onClicked: backend.updateInput(row.input.name)
     }
     IconAction {
-        iconName: "web-browser-symbolic"
+        iconName: "help-about-symbolic"
         // Place gardée : la ligne ne bouge pas quand l'icône apparaît.
         opacity: row.url.length > 0 && hover.hovered ? 1 : 0
         enabled: row.url.length > 0
