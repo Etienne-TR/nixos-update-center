@@ -69,7 +69,8 @@ class Backend : public QObject {
   Q_INVOKABLE void stopPrebuild();
   Q_INVOKABLE void boostPrebuild();
   Q_INVOKABLE void openPrebuildJournal();
-  Q_INVOKABLE void refreshPending();
+  // quick : git seulement (démarrage, ouverture, toutes les 5 minutes).
+  Q_INVOKABLE void refreshPending(bool quick = false);
   Q_INVOKABLE void refreshGenerations();
   Q_INVOKABLE void rollbackSystem(int generation);
   Q_INVOKABLE void rollbackHome(int generation);

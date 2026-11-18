@@ -49,7 +49,8 @@ ScrollView {
             Label {
                 Layout.fillWidth: true
                 opacity: 0.7
-                text: page.pending.time ? "Vérifié " + backend.formatTime(page.pending.time) : "Pas encore vérifié"
+                text: (page.pending.time ? "Recherche complète " + backend.formatTime(page.pending.time) : "Pas encore de recherche complète")
+                      + (page.pending.quick && page.pending.quickTime ? " · config vérifiée " + backend.formatTime(page.pending.quickTime) : "")
             }
             BusyIndicator {
                 visible: backend.pendingBusy
@@ -61,7 +62,7 @@ ScrollView {
                 icon.name: "view-refresh"
                 text: "Rechercher les mises à jour disponibles"
                 ToolTip.visible: hovered
-                ToolTip.text: "Config à appliquer (système, Home Manager), nouvelles versions du flake (sans toucher flake.lock), Flatpaks : rien n'est modifié. Lancée aussi à l'ouverture de la fenêtre."
+                ToolTip.text: "Recherche complète (30 à 60 s) : évaluation du système et de Home Manager, nouvelles versions du flake (sans toucher flake.lock), Flatpaks, Claude Desktop. Rien n'est modifié. La config (git) est aussi vérifiée à l'ouverture et toutes les 5 minutes."
                 enabled: !backend.pendingBusy
                 onClicked: backend.refreshPending()
             }

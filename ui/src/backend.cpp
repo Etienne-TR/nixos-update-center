@@ -61,6 +61,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   poll();
   refreshGenerations();
   refreshRoutine();
+  refreshPending(true);
 }
 
 QString Backend::title() const { return QStringLiteral(APP_TITLE); }
@@ -94,7 +95,7 @@ void Backend::readRun() {
     // Fin d'une mise à jour : ce qui attend n'est plus le même.
     if (wasActive && !active) {
       refreshGenerations();
-      refreshPending();
+      refreshPending(true);
     }
   }
   readLogTail();
@@ -308,7 +309,7 @@ void Backend::rollbackHome(int generation) {
   startUpdate({"--rollback-home", QString::number(generation)});
 }
 
-void Backend::refreshPending() {
+void Backend::refreshPending(bool quick) {
   if (m_pendingBusy) return;
   m_pendingBusy = true;
   emit pendingChanged();
@@ -320,7 +321,7 @@ void Backend::refreshPending() {
     readPending();
     emit pendingChanged();
   });
-  p->start(m_engine, {"pending"});
+  p->start(m_engine, quick ? QStringList{"pending", "--quick"} : QStringList{"pending"});
 }
 
 void Backend::refreshGenerations() {

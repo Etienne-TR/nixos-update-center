@@ -12,13 +12,15 @@ ApplicationWindow {
     minimumHeight: 420
     visible: false
 
-    // À l'ouverture de la fenêtre : recherche des mises à jour si la
-    // dernière date de plus de 5 minutes (pas au démarrage de la session,
-    // où l'app est cachée).
-    onVisibleChanged: {
-        if (!visible || backend.pendingBusy) return;
-        const t = backend.pending.time || 0;
-        if (Date.now() / 1000 - t > 300) backend.refreshPending();
+    // Vérification rapide (git seulement) à l'ouverture de la fenêtre et
+    // toutes les 5 minutes tant qu'elle est ouverte ; la complète se lance
+    // par le bouton « Rechercher ».
+    onVisibleChanged: if (visible && !backend.pendingBusy) backend.refreshPending(true)
+    Timer {
+        interval: 5 * 60 * 1000
+        repeat: true
+        running: window.visible
+        onTriggered: if (!backend.pendingBusy) backend.refreshPending(true)
     }
 
     // Fermer la fenêtre la cache : l'icône reste dans le tray.

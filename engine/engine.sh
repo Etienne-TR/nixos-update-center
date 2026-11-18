@@ -702,7 +702,7 @@ lock_diff() { # ancien, nouveau
   [ "$n" -gt 0 ] || { echo "$json" && return; }
   cache="$state/input-cache.json"
   [ -s "$cache" ] || echo '{}' >"$cache"
-  sys=$(nix eval --raw --impure --expr builtins.currentSystem 2>/dev/null || echo x86_64-linux)
+  sys=$(uname -m)-linux
   ref() { # commit → référence de flake
     case "$type" in
       github) echo "github:$owner/$repo/$1" ;;
@@ -718,6 +718,8 @@ lock_diff() { # ancien, nouveau
       echo "$v"
       return 0
     fi
+    # Vérification rapide : seulement ce qui est déjà en cache.
+    [ -z "${pending_quick:-}" ] || return 0
     v=$(timeout 120 nix eval --raw "$r#packages.$sys.default.version" 2>/dev/null || true)
     jq --arg k "$key" --arg v "$v" '.[$k] = $v' "$cache" | write_json "$cache"
     echo "$v"
@@ -730,7 +732,9 @@ lock_diff() { # ancien, nouveau
     commits=null
     if [ "$type" = github ] && [ "$from" != - ] && [ "$to" != - ]; then
       local key="c:$owner/$repo/$from...$to"
-      if ! commits=$(jq -e --arg k "$key" '.[$k]' "$cache" 2>/dev/null); then
+      if ! commits=$(jq -e --arg k "$key" '.[$k]' "$cache" 2>/dev/null) && [ -n "${pending_quick:-}" ]; then
+        commits=null
+      elif [ "$commits" = "" ] || [ "$commits" = null ]; then
         commits=$(curl -fsS --max-time 10 "https://api.github.com/repos/$owner/$repo/compare/$from...$to" 2>/dev/null |
           jq '.ahead_by // null' 2>/dev/null || echo null)
         [ -n "$commits" ] || commits=null
@@ -801,8 +805,15 @@ changes() { # partie, dépôt, flake.lock relatif au dépôt, flake relatif, fla
 # application, entrées du flake.lock changées, paquets qui changent (nvd, si
 # la préparation a construit), Flatpaks, Claude Desktop, commits non envoyés.
 # Écrit pending.json et l'affiche.
+# --quick : seulement git et les fichiers locaux (moins d'une seconde) :
+# commits, fichiers modifiés et entrées du flake.lock depuis la dernière
+# application ; « à appliquer » déduit de git, sans évaluation. Nouvelles
+# versions en ligne, Flatpaks et Claude Desktop : ceux de la dernière
+# vérification complète.
+pending_quick=""
 cmd_pending() {
-  local repo rel dir cur tmp
+  [ "${1:-}" != --quick ] || pending_quick=1
+  local repo rel dir cur tmp prev
   # Une seule vérification à la fois (deux fenêtres, routine…) : la suivante
   # attend la fin de la première.
   mkdir -p "$state"
@@ -819,10 +830,14 @@ cmd_pending() {
   dir=$(realpath --relative-to="$repo" "$flake")
   cur="$flake/flake.lock"
 
+  prev="$state/pending.json"
+  [ -s "$prev" ] || prev=/dev/null
   # 1 et 2 : évaluation seule, comparée aux générations actives.
-  sys_changed=$(differs "$flake#nixosConfigurations.$host.config.system.build.toplevel" /run/current-system)
-  home_changed=$(differs "$flake#homeConfigurations.$hmconf.activationPackage" \
-    "$HOME/.local/state/nix/profiles/home-manager")
+  if [ -z "$pending_quick" ]; then
+    sys_changed=$(differs "$flake#nixosConfigurations.$host.config.system.build.toplevel" /run/current-system)
+    home_changed=$(differs "$flake#homeConfigurations.$hmconf.activationPackage" \
+      "$HOME/.local/state/nix/profiles/home-manager")
+  fi
 
   # Détail de ce qui est à appliquer, pour chaque partie depuis sa dernière
   # application : commits et fichiers modifiés (rangés par dossier :
@@ -845,18 +860,30 @@ cmd_pending() {
     home_diff=$(nvd --color never diff "$hm_profile" "$built_home" 2>/dev/null || true)
   fi
 
+  if [ -n "$pending_quick" ]; then
+    # Déduit de git : quelque chose depuis la dernière application ?
+    local fl
+    fl=$(jq '(.commits | length) + (.dirty | length)' <<<"$flake_changes")
+    sys_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$sys_changes")
+    home_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$home_changes")
+    upstream=$(jq -c '.upstream.inputs // []' "$prev" 2>/dev/null || echo "[]")
+    upstream_ok=$(jq -c '.upstream.checked // false' "$prev" 2>/dev/null || echo false)
+    flatpaks=$(jq -c '.flatpaks // []' "$prev" 2>/dev/null || echo "[]")
+    claude=$(jq -c '.claudeDesktop // null' "$prev" 2>/dev/null || echo null)
+  fi
+
   # 3 : nouvelles versions proposées par le flake, sans toucher flake.lock.
-  if (cd "$flake" && nix flake update --output-lock-file "$tmp/new.lock" >/dev/null 2>&1); then
+  if [ -z "$pending_quick" ] && (cd "$flake" && nix flake update --output-lock-file "$tmp/new.lock" >/dev/null 2>&1); then
     upstream=$(lock_diff "$cur" "$tmp/new.lock")
     upstream_ok=true
   fi
 
-  if [ "$(cfg .flatpak)" = true ]; then
+  if [ -z "$pending_quick" ] && [ "$(cfg .flatpak)" = true ]; then
     flatpaks=$(flatpak remote-ls --updates --user --columns=application,name,branch 2>/dev/null |
       jq -R 'split("\t") | select(length >= 3) | {id: .[0], name: .[1], branch: .[2]}' | jq -s .)
   fi
 
-  if [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
+  if [ -z "$pending_quick" ] && [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
     rc=0
     out=$(claude_check) || rc=$?
     if [ "$rc" -le 1 ]; then
@@ -869,7 +896,11 @@ cmd_pending() {
   unpushed=$(git -C "$repo" log --format='%h%x09%s' '@{u}..' 2>/dev/null |
     jq -R 'split("\t") | {hash: .[0], subject: .[1]}' | jq -s .)
 
-  jq -n --argjson time "$(now)" \
+  local full_time
+  full_time=$(now)
+  [ -z "$pending_quick" ] || full_time=$(jq '.time // 0' "$prev" 2>/dev/null || echo 0)
+  jq -n --argjson time "$full_time" --argjson quickTime "$(now)" \
+    --argjson quick "$([ -n "$pending_quick" ] && echo true || echo false)" \
     --argjson sysc "$sys_changed" --argjson homec "$home_changed" \
     --argjson sysch "$sys_changes" --argjson homech "$home_changes" --argjson flakech "$flake_changes" \
     --arg sys "$system_diff" --arg home "$home_diff" \
@@ -877,7 +908,7 @@ cmd_pending() {
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
     --argjson flatpaks "$flatpaks" --argjson claude "$claude" --argjson unpushed "$unpushed" \
     --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
-    { time: $time,
+    { time: $time, quickTime: $quickTime, quick: $quick,
       apply: {
         system: ({changed: $sysc, built: ($sysb != ""), diff: $sys} + $sysch),
         home: ({changed: $homec, built: ($homeb != ""), diff: $home} + $homech),
@@ -1055,7 +1086,7 @@ cmd="${1:-}"
 case "$cmd" in
   run) cmd_run "$@" ;;
   prebuild) cmd_prebuild ;;
-  pending) cmd_pending ;;
+  pending) cmd_pending "$@" ;;
   generations) cmd_generations ;;
   weekly) cmd_weekly "$@" ;;
   apply-settings) cmd_apply_settings ;;
