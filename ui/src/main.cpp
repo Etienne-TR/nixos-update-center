@@ -203,7 +203,8 @@ int main(int argc, char **argv) {
     // Icône seulement pendant que quelque chose tourne (routine,
     // préparation, mise à jour) ou quand une mise à jour préparée attend
     // d'être installée ; sinon la fenêtre s'ouvre depuis le lanceur.
-    tray.setVisible(busy || backend.updateReady());
+    // Mode développement : toujours visible, pour son menu « Quitter ».
+    tray.setVisible(busy || backend.updateReady() || !qmlDir.isEmpty());
   };
   QObject::connect(&backend, &Backend::summaryChanged, refreshTray);
   QObject::connect(&backend, &Backend::prebuildChanged, refreshTray);
