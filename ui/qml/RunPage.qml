@@ -41,17 +41,12 @@ ColumnLayout {
         // Ce qui tourne d'abord.
         return t.filter(x => x.state === "running").concat(t.filter(x => x.state !== "running"));
     }
-    // En-tête du détail : bouton de la liste des tâches devant le titre.
+    // En-tête du détail : titre et sous-titre.
     component DetailHeader: RowLayout {
         property string title
         property string subtitle
         Layout.fillWidth: true
         Layout.minimumHeight: Kirigami.Units.gridUnit * 2
-        IconAction {
-            iconName: layoutSettings.listHidden ? "sidebar-show-symbolic" : "pane-hide-symbolic"
-            tooltip: layoutSettings.listHidden ? "Afficher la liste des tâches" : "Masquer la liste des tâches"
-            onClicked: layoutSettings.listHidden = !layoutSettings.listHidden
-        }
         Label {
             text: parent.title
             font.bold: true
@@ -87,14 +82,32 @@ ColumnLayout {
         // Liste des tâches.
         Item {
             id: taskList
-            visible: !layoutSettings.listHidden
-            SplitView.preferredWidth: layoutSettings.listWidth
-            SplitView.minimumWidth: Kirigami.Units.gridUnit * 8
-            SplitView.maximumWidth: page.width / 2
+            // Masquée : il reste une fine bande avec le bouton, à la même place.
+            readonly property real stripWidth: Kirigami.Units.iconSizes.small + 2 * Kirigami.Units.smallSpacing
+            SplitView.preferredWidth: layoutSettings.listHidden ? stripWidth : layoutSettings.listWidth
+            SplitView.minimumWidth: layoutSettings.listHidden ? stripWidth : Kirigami.Units.gridUnit * 8
+            SplitView.maximumWidth: layoutSettings.listHidden ? stripWidth : page.width / 2
             // Largeur choisie en tirant la séparation, gardée.
-            SplitView.onPreferredWidthChanged: layoutSettings.listWidth = SplitView.preferredWidth
+            SplitView.onPreferredWidthChanged: if (!layoutSettings.listHidden) layoutSettings.listWidth = SplitView.preferredWidth
+            // Ligne du bouton, en haut à gauche, à la hauteur des titres du détail.
+            RowLayout {
+                id: listHeader
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: Kirigami.Units.gridUnit * 2
+                IconAction {
+                    iconName: layoutSettings.listHidden ? "sidebar-show-symbolic" : "pane-hide-symbolic"
+                    tooltip: layoutSettings.listHidden ? "Afficher la liste des tâches" : "Masquer la liste des tâches"
+                    onClicked: layoutSettings.listHidden = !layoutSettings.listHidden
+                }
+                Item { Layout.fillWidth: true }
+            }
             ListView {
-                anchors.fill: parent
+                visible: !layoutSettings.listHidden
+                anchors.top: listHeader.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
                 clip: true
                 model: page.tasks
                 delegate: ItemDelegate {
