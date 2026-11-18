@@ -12,6 +12,8 @@ Frame {
     property string badge
     property color badgeColor: Kirigami.Theme.textColor
     default property alias content: inner.data
+    // Boutons d'action, alignés à droite sur la ligne du titre.
+    property alias actions: actionsRow.data
     Layout.fillWidth: true
 
     ColumnLayout {
@@ -39,6 +41,10 @@ Frame {
                 opacity: 0.7
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignRight
+            }
+            RowLayout {
+                id: actionsRow
+                spacing: Kirigami.Units.smallSpacing
             }
         }
         ColumnLayout {
