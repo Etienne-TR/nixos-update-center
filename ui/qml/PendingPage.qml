@@ -54,8 +54,12 @@ ScrollView {
             Label {
                 Layout.fillWidth: true
                 opacity: 0.7
-                text: (page.pending.time ? "Recherche complète " + backend.formatTime(page.pending.time) : "Pas encore de recherche complète")
-                      + (page.pending.quick && page.pending.quickTime ? " · config vérifiée " + backend.formatTime(page.pending.quickTime) : "")
+                text: page.pending.time ? "Dernière recherche " + backend.formatTime(page.pending.time) : "Pas encore de recherche"
+                // Détail au survol : la config (git) est revérifiée plus souvent.
+                HoverHandler { id: timeHover }
+                ToolTip.visible: timeHover.hovered && !!page.pending.quickTime
+                ToolTip.text: "Recherche complète " + backend.formatTime(page.pending.time)
+                              + "\nConfig (git) vérifiée " + backend.formatTime(page.pending.quickTime)
             }
             BusyIndicator {
                 visible: backend.pendingBusy
