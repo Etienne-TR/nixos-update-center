@@ -292,7 +292,7 @@ ScrollView {
             Label {
                 visible: flakeCard.lockInputs.length > 0
                 Layout.topMargin: Kirigami.Units.smallSpacing
-                text: "Entrées du flake.lock non installées"
+                text: "Entrées non installées (flake.lock)"
                 font.bold: true
             }
             Repeater {
