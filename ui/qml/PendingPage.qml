@@ -174,11 +174,11 @@ ScrollView {
                 readonly property var st: page.apply[modelData.key] || {}
                 Layout.fillWidth: true
                 title: modelData.label
-                // État à côté du titre ; le détail (pourquoi) en dessous.
-                subtitle: st.changed === true
-                          ? ((st.commits || []).length + (st.dirty || []).length > 0 ? "● à appliquer" : "● à appliquer (modifications du flake)")
-                          : st.changed === false ? "✓ à jour"
-                          : (page.pending.time ? "? évaluation en échec" : "? pas encore vérifié")
+                // État : pastille après le titre (● à appliquer, ✓ à jour).
+                badge: st.changed === true ? "●" : st.changed === false ? "✓" : "?"
+                badgeColor: st.changed === true ? Kirigami.Theme.neutralTextColor
+                          : st.changed === false ? Kirigami.Theme.positiveTextColor
+                          : Kirigami.Theme.negativeTextColor
 
 
                 // Pourquoi : ce qui a changé depuis la dernière application.

@@ -8,6 +8,9 @@ Frame {
     id: card
     property string title
     property string subtitle
+    // Pastille juste après le titre (état de la section).
+    property string badge
+    property color badgeColor: Kirigami.Theme.textColor
     default property alias content: inner.data
     Layout.fillWidth: true
 
@@ -23,6 +26,12 @@ Frame {
                 text: card.title
                 font.bold: true
                 font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.1
+            }
+            Label {
+                visible: card.badge.length > 0
+                text: card.badge
+                color: card.badgeColor
+                font.bold: true
             }
             Label {
                 Layout.fillWidth: true
