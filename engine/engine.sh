@@ -165,10 +165,14 @@ stop_prebuild() {
 # s'applique pas, d'où les `|| return 1` explicites sur chaque étape qui
 # doit faire échouer la partie.
 
+# Entrées à faire avancer (--flake-input) ; aucune : toutes.
+flake_inputs=()
 part_flake() {
-  nix flake update || return 1
+  local msg="chore(flake): mise à jour du flake.lock"
+  [ "${#flake_inputs[@]}" -eq 0 ] || msg="chore(flake): mise à jour de ${flake_inputs[*]}"
+  nix flake update "${flake_inputs[@]}" || return 1
   if ! git diff --quiet -- flake.lock; then
-    git commit -q -m "chore(flake): mise à jour du flake.lock" -- flake.lock || return 1
+    git commit -q -m "$msg" -- flake.lock || return 1
     echo "flake.lock mis à jour et committé."
   fi
 }
@@ -437,6 +441,11 @@ cmd_run() {
       --flatpak) flatpak=1 ;;
       --all) system=1 home=1 flatpak=1 ;;
       --flake) flake_update=1 ;;
+      --flake-input)
+        [[ "${2:-}" =~ ^[A-Za-z0-9_-]+$ ]] || die "nom d'entrée invalide : ${2:-}"
+        flake_update=1 flake_inputs+=("$2")
+        shift
+        ;;
       --rollback-system) rollback_system_gen="${2:?}" && shift ;;
       --rollback-home) rollback_home_gen="${2:?}" && shift ;;
       *) die "option inconnue : $1" ;;
@@ -466,7 +475,9 @@ cmd_run() {
     part_label[$1]="$2"
     part_state[$1]=pending
   }
-  [ -z "$flake_update" ] || add_part flake "Flake"
+  if [ -n "$flake_update" ]; then
+    if [ "${#flake_inputs[@]}" -gt 0 ]; then add_part flake "Flake (${flake_inputs[*]})"; else add_part flake "Flake"; fi
+  fi
   [ -z "$rollback_system_gen" ] || add_part rollback_system "Retour à la génération système $rollback_system_gen"
   [ -z "$rollback_home_gen" ] || add_part rollback_home "Retour à la génération Home Manager $rollback_home_gen"
   [ -z "$system" ] || add_part system "Système"
@@ -870,7 +881,10 @@ cmd_pending() {
     fl=$(jq '(.commits | length) + (.dirty | length)' <<<"$flake_changes")
     sys_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$sys_changes")
     home_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$home_changes")
-    upstream=$(jq -c '.upstream.inputs // []' "$prev" 2>/dev/null || echo "[]")
+    # Sans celles que flake.lock a rattrapées depuis (entrée mise à jour seule).
+    upstream=$(jq -c --slurpfile l "$cur" '($l[0]) as $L
+      | [.upstream.inputs[]? | select(.to.rev != ($L.nodes[$L.nodes.root.inputs[.name] // ""].locked.rev // ""))]' \
+      "$prev" 2>/dev/null || echo "[]")
     upstream_ok=$(jq -c '.upstream.checked // false' "$prev" 2>/dev/null || echo false)
     flatpaks=$(jq -c '.flatpaks // []' "$prev" 2>/dev/null || echo "[]")
     claude=$(jq -c '.claudeDesktop // null' "$prev" 2>/dev/null || echo null)

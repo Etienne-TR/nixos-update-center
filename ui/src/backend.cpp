@@ -295,6 +295,8 @@ void Backend::resetRoutine() {
   runEngine({"apply-settings"}, [this](int, const QByteArray &) { refreshRoutine(); });
 }
 
+void Backend::updateInput(const QString &name) { startUpdate({"--flake-input", name}); }
+
 void Backend::stopRun() { QProcess::startDetached(QStringLiteral(APP_NAME), {"--stop"}); }
 void Backend::startPrebuild() { engine({"start-prebuild"}); }
 void Backend::stopPrebuild() { engine({"stop-prebuild"}); }

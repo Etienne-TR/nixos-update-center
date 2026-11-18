@@ -61,6 +61,8 @@ class Backend : public QObject {
 
   Q_INVOKABLE void startUpdate(const QStringList &parts);
   Q_INVOKABLE void checkUpdates();
+  // nix flake update <entrée> (commit de flake.lock), dans l'unité de mise à jour.
+  Q_INVOKABLE void updateInput(const QString &name);
   Q_INVOKABLE void refreshRoutine();
   Q_INVOKABLE void saveRoutine(const QVariantMap &routine);
   Q_INVOKABLE void resetRoutine();

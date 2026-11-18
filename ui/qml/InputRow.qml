@@ -11,6 +11,8 @@ RowLayout {
     required property var input
     property string label: ""
     property string url: ""
+    // Bouton « mettre à jour cette entrée » (nouvelles versions en ligne).
+    property bool updatable: false
     Layout.fillWidth: true
 
     HoverHandler { id: hover }
@@ -28,6 +30,19 @@ RowLayout {
         text: row.label
         ToolTip.visible: truncated && hover.hovered
         ToolTip.text: row.label
+    }
+    ToolButton {
+        icon.name: "download"
+        visible: row.updatable
+        opacity: hover.hovered ? 1 : 0
+        enabled: !window.running
+        implicitHeight: detail.implicitHeight + Kirigami.Units.smallSpacing
+        implicitWidth: implicitHeight
+        display: AbstractButton.IconOnly
+        onClicked: backend.updateInput(row.input.name)
+        ToolTip.visible: hovered
+        ToolTip.text: "update --flake-input " + row.input.name + " : nix flake update " + row.input.name
+                      + " seule, avec commit de flake.lock. Elle passe ensuite dans « Entrées du flake », à appliquer."
     }
     ToolButton {
         icon.name: "internet-web-browser"

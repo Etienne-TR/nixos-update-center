@@ -354,6 +354,7 @@ ScrollView {
                     input: modelData
                     label: page.revLabel(modelData)
                     url: page.compareUrl(modelData)
+                    updatable: true
                 }
             }
             actions: [

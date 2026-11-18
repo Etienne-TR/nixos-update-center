@@ -24,6 +24,8 @@ Usage : @command@ [--system] [--home] [--flatpak] [--all] [--flake]
   --all         les trois (par défaut)
   --flake       d'abord nix flake update, avec commit de flake.lock s'il
                 change ; seul, ne fait que ça
+  --flake-input NOM
+                comme --flake, pour cette seule entrée (répétable)
 
   --follow      suivre la mise à jour en cours
   --stop        arrêter la mise à jour en cours
@@ -50,6 +52,11 @@ while [ $# -gt 0 ]; do
   shift
   case "$arg" in
     --system | --home | --flatpak | --all | --flake) parts+=("$arg") ;;
+    --flake-input)
+      [[ "${1:-}" =~ ^[A-Za-z0-9_-]+$ ]] || { usage >&2 && exit 2; }
+      parts+=("$arg" "$1")
+      shift
+      ;;
     --rollback-system | --rollback-home)
       [[ "${1:-}" =~ ^[0-9]+$ ]] || { usage >&2 && exit 2; }
       parts+=("$arg" "$1")
