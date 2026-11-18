@@ -266,7 +266,9 @@ ScrollView {
                 return out;
             }
             visible: (fl.commits || []).length + (fl.dirty || []).length + lockInputs.length > 0
-            title: "Modifications du flake"
+            title: "Entrées du flake"
+            badge: "●"
+            badgeColor: Kirigami.Theme.neutralTextColor
             Label {
                 visible: (flakeCard.fl.commits || []).length > 0
                 text: "Commits de flake.nix depuis la dernière application"
@@ -328,8 +330,9 @@ ScrollView {
         }
 
         Card {
-            title: "Nouvelles versions disponibles (flake)"
-            subtitle: (page.upstream.inputs || []).length > 0 ? page.upstream.inputs.length + " entrée(s) avec une version plus récente" : ""
+            title: "Nouvelles versions des entrées"
+            badge: (page.upstream.inputs || []).length > 0 ? "●" : (page.upstream.checked ? "✓" : "")
+            badgeColor: (page.upstream.inputs || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flake" }
             Label {
                 visible: (page.upstream.inputs || []).length === 0
@@ -375,7 +378,8 @@ ScrollView {
 
         Card {
             title: "Flatpaks"
-            subtitle: (page.pending.flatpaks || []).length > 0 ? page.pending.flatpaks.length + " mise(s) à jour (installées par « Appliquer »)" : ""
+            badge: (page.pending.flatpaks || []).length > 0 ? "●" : "✓"
+            badgeColor: (page.pending.flatpaks || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flatpak" }
             Label {
                 visible: (page.pending.flatpaks || []).length === 0
