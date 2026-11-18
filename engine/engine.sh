@@ -905,9 +905,11 @@ cmd_pending() {
     fl=$(jq '(.commits | length) + (.dirty | length)' <<<"$flake_changes")
     sys_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$sys_changes")
     home_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$home_changes")
-    # Sans celles que flake.lock a rattrapées depuis (entrée mise à jour seule).
+    # Seulement celles que flake.lock n'a pas fait avancer depuis la
+    # recherche complète (une entrée mise à jour seule a pu prendre une
+    # révision encore plus récente : la prochaine recherche le dira).
     upstream=$(jq -c --slurpfile l "$cur" '($l[0]) as $L
-      | [.upstream.inputs[]? | select(.to.rev != ($L.nodes[$L.nodes.root.inputs[.name] // ""].locked.rev // ""))]' \
+      | [.upstream.inputs[]? | select(.from.rev == ($L.nodes[$L.nodes.root.inputs[.name] // ""].locked.rev // ""))]' \
       "$prev" 2>/dev/null || echo "[]")
     upstream_ok=$(jq -c '.upstream.checked // false' "$prev" 2>/dev/null || echo false)
     flatpaks=$(jq -c '.flatpaks // []' "$prev" 2>/dev/null || echo "[]")
