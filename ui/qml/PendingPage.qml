@@ -19,18 +19,19 @@ ScrollView {
     // l'entrée quand elle en a une, et date du commit (avec l'heure si c'est
     // le même jour) ; plus le nombre de commits quand GitHub le donne.
     function revLabel(input) {
-        // Ancienneté de la révision actuelle (verrouillée ou installée), en
-        // jours, plutôt que des dates.
-        const age = secs => {
-            if (!secs) return "?";
-            const d = Math.floor((Date.now() / 1000 - secs) / 86400);
-            return d <= 0 ? "aujourd'hui" : d === 1 ? "1 jour" : d + " jours";
+        // Retard de la révision que tu as sur la plus récente, en jours
+        // (dates des deux commits).
+        const lag = (a, b) => {
+            if (!a || !b) return "";
+            const d = Math.round((b - a) / 86400);
+            return d <= 0 ? "moins d'un jour de retard" : d === 1 ? "1 jour de retard" : d + " jours de retard";
         };
         if (!input.from) return "nouvelle entrée" + (input.toVersion ? " · " + input.toVersion : "");
         const parts = [];
         if (input.fromVersion || input.toVersion)
             parts.push((input.fromVersion || "?") + " → " + (input.toVersion || "?"));
-        parts.push("actuelle : " + age(input.from.date));
+        const l = lag(input.from.date, input.to.date);
+        if (l) parts.push(l);
         if (input.commits) parts.push(input.commits + " commit" + (input.commits > 1 ? "s" : ""));
         return parts.join(" · ");
     }
