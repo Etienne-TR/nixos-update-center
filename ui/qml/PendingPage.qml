@@ -336,6 +336,7 @@ ScrollView {
 
         Card {
             title: "Mise à jour du flake"
+            bodyVisible: (page.upstream.inputs || []).length > 0 || !page.upstream.checked
             badge: (page.upstream.inputs || []).length > 0 ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: (page.upstream.inputs || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flake" }
@@ -344,8 +345,7 @@ ScrollView {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 opacity: 0.7
-                text: page.upstream.checked ? "Aucune nouvelle version : le flake.lock est à jour."
-                                            : "Pas encore vérifié (ou réseau indisponible)."
+                text: "Pas encore vérifié (ou réseau indisponible)."
             }
             Repeater {
                 model: page.upstream.inputs || []
@@ -381,14 +381,10 @@ ScrollView {
 
         Card {
             title: "Flatpaks"
+            bodyVisible: (page.pending.flatpaks || []).length > 0
             badge: (page.pending.flatpaks || []).length > 0 ? "●" : "✓"
             badgeColor: (page.pending.flatpaks || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flatpak" }
-            Label {
-                visible: (page.pending.flatpaks || []).length === 0
-                text: "Aucune mise à jour Flatpak."
-                opacity: 0.7
-            }
             Repeater {
                 model: page.pending.flatpaks || []
                 Label {
