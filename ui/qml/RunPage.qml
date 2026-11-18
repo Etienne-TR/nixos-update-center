@@ -41,33 +41,51 @@ ColumnLayout {
         // Ce qui tourne d'abord.
         return t.filter(x => x.state === "running").concat(t.filter(x => x.state !== "running"));
     }
-    property string selected: ""
-    readonly property string current: selected.length > 0 && tasks.some(t => t.id === selected) ? selected : tasks[0].id
-
-    // Afficher ou masquer la liste des tâches ; sa largeur se règle en
-    // tirant la séparation.
-    RowLayout {
+    // En-tête du détail : bouton de la liste des tâches devant le titre.
+    component DetailHeader: RowLayout {
+        property string title
+        property string subtitle
         Layout.fillWidth: true
+        Layout.minimumHeight: Kirigami.Units.gridUnit * 2
         IconAction {
             iconName: layoutSettings.listHidden ? "sidebar-show-symbolic" : "pane-hide-symbolic"
             tooltip: layoutSettings.listHidden ? "Afficher la liste des tâches" : "Masquer la liste des tâches"
             onClicked: layoutSettings.listHidden = !layoutSettings.listHidden
         }
         Label {
-            visible: layoutSettings.listHidden
-            text: (page.tasks.find(t => t.id === page.current) || {}).title || ""
+            text: parent.title
             font.bold: true
+            font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.2
         }
-        Item { Layout.fillWidth: true }
+        Label {
+            Layout.fillWidth: true
+            text: parent.subtitle
+            opacity: 0.7
+            elide: Text.ElideRight
+            horizontalAlignment: Text.AlignRight
+        }
     }
+
+    property string selected: ""
+    readonly property string current: selected.length > 0 && tasks.some(t => t.id === selected) ? selected : tasks[0].id
 
     SplitView {
         Layout.fillWidth: true
         Layout.fillHeight: true
         orientation: Qt.Horizontal
+        // Séparation : un simple trait vertical, sur toute la hauteur.
+        handle: Item {
+            implicitWidth: Kirigami.Units.largeSpacing
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 1
+                height: parent.height
+                color: Qt.alpha(Kirigami.Theme.textColor, SplitHandle.hovered || SplitHandle.pressed ? 0.4 : 0.15)
+            }
+        }
 
         // Liste des tâches.
-        Frame {
+        Item {
             id: taskList
             visible: !layoutSettings.listHidden
             SplitView.preferredWidth: layoutSettings.listWidth
@@ -75,7 +93,6 @@ ColumnLayout {
             SplitView.maximumWidth: page.width / 2
             // Largeur choisie en tirant la séparation, gardée.
             SplitView.onPreferredWidthChanged: layoutSettings.listWidth = SplitView.preferredWidth
-            padding: 0
             ListView {
                 anchors.fill: parent
                 clip: true
@@ -117,10 +134,14 @@ ColumnLayout {
                     const expected = (b.expected || 0) + (d.expected || 0);
                     return expected > 0 ? Math.min(1, ((b.done || 0) + (b.failed || 0) + (d.done || 0)) / expected) : -1;
                 }
-                Card {
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
                     id: runCard
-                    title: window.runTitle(page.run.active ? "running" : page.run.state)
-                    subtitle: page.run.started ? "lancée " + backend.formatTime(page.run.started) : ""
+                    DetailHeader {
+                        title: window.runTitle(page.run.active ? "running" : page.run.state)
+                        subtitle: page.run.started ? "lancée " + backend.formatTime(page.run.started) : ""
+                    }
                     Flow {
                         Layout.fillWidth: true
                         spacing: Kirigami.Units.largeSpacing
@@ -171,10 +192,14 @@ ColumnLayout {
             // Préparation : avancement de Nix et Flatpak, journal du service.
             ColumnLayout {
                 spacing: Kirigami.Units.largeSpacing
-                Card {
-                    title: backend.prebuildActive ? "Préparation en cours" : "Préparation en arrière-plan"
-                    subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale")
-                            : page.result.time ? backend.formatTime(page.result.time) : ""
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+                    DetailHeader {
+                        title: backend.prebuildActive ? "Préparation en cours" : "Préparation en arrière-plan"
+                        subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale")
+                                : page.result.time ? backend.formatTime(page.result.time) : ""
+                    }
                     ProgressBar {
                         visible: backend.prebuildActive
                         Layout.fillWidth: true
@@ -217,8 +242,12 @@ ColumnLayout {
 
             // Recherche des mises à jour : courte, sans journal.
             ColumnLayout {
-                Card {
-                    title: "Recherche des mises à jour"
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+                    DetailHeader {
+                        title: "Recherche des mises à jour"
+                    }
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
