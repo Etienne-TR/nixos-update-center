@@ -330,7 +330,7 @@ ScrollView {
         }
 
         Card {
-            title: "Nouvelles entrées disponibles"
+            title: "Mises à jour des entrées"
             badge: (page.upstream.inputs || []).length > 0 ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: (page.upstream.inputs || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flake" }
