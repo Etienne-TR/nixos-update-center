@@ -203,13 +203,15 @@ int main(int argc, char **argv) {
     // Icône seulement pendant que quelque chose tourne (routine,
     // préparation, mise à jour) ou quand une mise à jour préparée attend
     // d'être installée ; sinon la fenêtre s'ouvre depuis le lanceur.
-    // Mode développement : toujours visible, pour son menu « Quitter ».
-    tray.setVisible(busy || backend.updateReady() || !qmlDir.isEmpty());
+    // Visible tant que la fenêtre est ouverte, pendant une préparation ou
+    // une mise à jour, et quand une mise à jour préparée attend.
+    tray.setVisible(busy || backend.updateReady() || (window && window->isVisible()));
   };
   QObject::connect(&backend, &Backend::summaryChanged, refreshTray);
   QObject::connect(&backend, &Backend::prebuildChanged, refreshTray);
   QObject::connect(&backend, &Backend::runChanged, refreshTray);
   refreshTray();
+  QObject::connect(window.data(), &QWindow::visibleChanged, refreshTray);
 
   // Fenêtre ouverte ou non, gardée pour la session (XDG_RUNTIME_DIR) : après
   // une mise à jour, la nouvelle version (lancée --hidden par le service)
@@ -266,6 +268,7 @@ int main(int argc, char **argv) {
       for (QObject *o : old) o->deleteLater();
       window = qobject_cast<QQuickWindow *>(engine.rootObjects().last());
       if (!window) return;
+      QObject::connect(window.data(), &QWindow::visibleChanged, refreshTray);
       title();
       if (geometry.isValid()) window->setGeometry(geometry);
       if (vis) show();
