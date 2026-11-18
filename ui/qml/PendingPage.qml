@@ -185,7 +185,7 @@ ScrollView {
                 Label {
                     visible: (partCard.st.commits || []).length > 0
                     Layout.topMargin: Kirigami.Units.smallSpacing
-                    text: "Commits depuis la dernière application"
+                    text: "Commits non appliqués"
                     font.bold: true
                 }
                 Repeater {
@@ -271,7 +271,7 @@ ScrollView {
             badgeColor: Kirigami.Theme.neutralTextColor
             Label {
                 visible: (flakeCard.fl.commits || []).length > 0
-                text: "Commits de flake.nix depuis la dernière application"
+                text: "Commits non appliqués (flake.nix)"
                 font.bold: true
             }
             Repeater {
