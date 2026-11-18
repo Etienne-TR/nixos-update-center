@@ -243,7 +243,7 @@ unchanged() { # installable, génération active
 
 # Comme unchanged, en JSON : true (à appliquer), false, null (évaluation
 # en échec).
-differs() { # installable, génération active
+differs() { # installable, génération active, fichier où écrire le chemin évalué
   local out err
   err=$(mktemp)
   if ! out=$(nix eval --raw "$1.outPath" 2>"$err"); then
@@ -254,7 +254,16 @@ differs() { # installable, génération active
     return
   fi
   rm -f "$err"
+  [ -z "${3:-}" ] || echo "$out" >"$3"
   if [ -e "$2" ] && [ "$(readlink -f "$2")" = "$out" ]; then echo false; else echo true; fi
+}
+
+# Paquets qui changent entre deux générations, en JSON :
+# [{name, change}] d'après les lignes « [U.] #1 nom 1.0 -> 1.1 » de nvd.
+packages_diff() { # génération active, génération construite
+  nvd --color never diff "$1" "$2" 2>/dev/null |
+    sed -nE 's/^\[([A-Z.]+)\][[:space:]]+#[0-9]+[[:space:]]+([^[:space:]]+)[[:space:]]+(.*)$/\1\t\2\t\3/p' |
+    jq -R 'split("\t") | {kind: .[0], name: .[1], change: (.[2] | gsub(" -> "; " → "))}' | jq -s .
 }
 
 # Au moins un switch fait (nettoyage des générations ensuite).
@@ -836,7 +845,7 @@ cmd_pending() {
   flock 8
   rm -f "$state/pending-errors.tmp"
   local sys_changed=null home_changed=null upstream="[]" upstream_ok=false
-  local system_diff="" home_diff="" built_sys built_home
+  local built_sys built_home
   local flatpaks="[]" claude="null" unpushed="[]" out rc
   mkdir -p "$state"
   tmp=$(mktemp -d)
@@ -848,10 +857,21 @@ cmd_pending() {
   prev="$state/pending.json"
   [ -s "$prev" ] || prev=/dev/null
   # 1 et 2 : évaluation seule, comparée aux générations actives.
+  # Générations évaluées (target) : reprises de la dernière vérification
+  # complète par la rapide, si la config n'a pas bougé depuis (même commit,
+  # mêmes fichiers modifiés).
+  local head dirty_hash target_sys="" target_home=""
+  head=$(git -C "$repo" rev-parse HEAD)
+  dirty_hash=$(git -C "$repo" status --porcelain | sha256sum | cut -d' ' -f1)
   if [ -z "$pending_quick" ]; then
-    sys_changed=$(differs "$flake#nixosConfigurations.$host.config.system.build.toplevel" /run/current-system)
+    sys_changed=$(differs "$flake#nixosConfigurations.$host.config.system.build.toplevel" /run/current-system "$tmp/target-sys")
     home_changed=$(differs "$flake#homeConfigurations.$hmconf.activationPackage" \
-      "$HOME/.local/state/nix/profiles/home-manager")
+      "$HOME/.local/state/nix/profiles/home-manager" "$tmp/target-home")
+    target_sys=$(cat "$tmp/target-sys" 2>/dev/null || true)
+    target_home=$(cat "$tmp/target-home" 2>/dev/null || true)
+  elif [ "$(jq -r '.head // ""' "$prev")" = "$head" ] && [ "$(jq -r '.dirtyHash // ""' "$prev")" = "$dirty_hash" ]; then
+    target_sys=$(jq -r '.apply.system.target // ""' "$prev")
+    target_home=$(jq -r '.apply.home.target // ""' "$prev")
   fi
 
   # Détail de ce qui est à appliquer, pour chaque partie depuis sa dernière
@@ -863,16 +883,20 @@ cmd_pending() {
   home_changes=$(changes home "$repo" "$rel" "$dir" "$cur" "$tmp")
   flake_changes=$(changes flake "$repo" "$rel" "$dir" "$cur" "$tmp")
 
-  # Paquets qui changent, si la préparation a construit cette version.
+  # Paquets qui changent : seulement si la préparation a construit
+  # exactement la génération de la config actuelle (sinon la liste serait
+  # périmée, voire à l'envers).
+  local pkgs_sys="[]" pkgs_home="[]"
   built_sys=$(jq -r '.paths.system // empty' "$prebuild_result" 2>/dev/null || true)
   built_home=$(jq -r '.paths.home // empty' "$prebuild_result" 2>/dev/null || true)
-  if [ -n "$built_sys" ] && [ -e "$built_sys" ] && [ "$(readlink -f /run/current-system)" != "$built_sys" ]; then
-    system_diff=$(nvd --color never diff /run/current-system "$built_sys" 2>/dev/null || true)
+  if [ -n "$built_sys" ] && [ "$built_sys" = "$target_sys" ] && [ -e "$built_sys" ] &&
+    [ "$(readlink -f /run/current-system)" != "$built_sys" ]; then
+    pkgs_sys=$(packages_diff /run/current-system "$built_sys")
   fi
   local hm_profile="$HOME/.local/state/nix/profiles/home-manager"
-  if [ -n "$built_home" ] && [ -e "$built_home" ] && [ -e "$hm_profile" ] &&
-    [ "$(readlink -f "$hm_profile")" != "$built_home" ]; then
-    home_diff=$(nvd --color never diff "$hm_profile" "$built_home" 2>/dev/null || true)
+  if [ -n "$built_home" ] && [ "$built_home" = "$target_home" ] && [ -e "$built_home" ] &&
+    [ -e "$hm_profile" ] && [ "$(readlink -f "$hm_profile")" != "$built_home" ]; then
+    pkgs_home=$(packages_diff "$hm_profile" "$built_home")
   fi
 
   if [ -n "$pending_quick" ]; then
@@ -921,15 +945,16 @@ cmd_pending() {
     --argjson quick "$([ -n "$pending_quick" ] && echo true || echo false)" \
     --argjson sysc "$sys_changed" --argjson homec "$home_changed" \
     --argjson sysch "$sys_changes" --argjson homech "$home_changes" --argjson flakech "$flake_changes" \
-    --arg sys "$system_diff" --arg home "$home_diff" \
+    --argjson pkgsys "$pkgs_sys" --argjson pkghome "$pkgs_home" \
+    --arg tsys "$target_sys" --arg thome "$target_home" --arg head "$head" --arg dirty "$dirty_hash" \
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
     --argjson flatpaks "$flatpaks" --argjson claude "$claude" --argjson unpushed "$unpushed" \
     --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
-    { time: $time, quickTime: $quickTime, quick: $quick,
+    { time: $time, quickTime: $quickTime, quick: $quick, head: $head, dirtyHash: $dirty,
       apply: {
-        system: ({changed: $sysc, built: ($sysb != ""), diff: $sys} + $sysch),
-        home: ({changed: $homec, built: ($homeb != ""), diff: $home} + $homech),
+        system: ({changed: $sysc, built: ($sysb != ""), target: $tsys, packages: $pkgsys} + $sysch),
+        home: ({changed: $homec, built: ($homeb != ""), target: $thome, packages: $pkghome} + $homech),
         flake: ($flakech | {commits, dirty}) },
       upstream: {checked: $upok, inputs: $upstream},
       flatpaks: $flatpaks, claudeDesktop: $claude, unpushed: $unpushed,

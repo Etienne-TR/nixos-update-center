@@ -193,8 +193,7 @@ ScrollView {
                 // version de paquet change (sinon nvd ne dit que « No version
                 // … changes »).
                 bodyVisible: st.changed !== false || backend.run.active === true
-                readonly property bool showDiff: st.changed === true && !!st.diff
-                    && !/No version or selection state changes/.test(st.diff)
+                readonly property var packages: st.changed === true ? (st.packages || []) : []
                 badgeColor: st.changed === true ? Kirigami.Theme.neutralTextColor
                           : st.changed === false ? Kirigami.Theme.positiveTextColor
                           : Kirigami.Theme.negativeTextColor
@@ -234,24 +233,31 @@ ScrollView {
                     }
                 }
                 Label {
-                    visible: partCard.showDiff
+                    visible: partCard.packages.length > 0
                     Layout.topMargin: Kirigami.Units.smallSpacing
-                    text: "Paquets qui changent (construits par la préparation)"
+                    text: "Paquets qui changent"
                     font.bold: true
                 }
-                Label {
-                    visible: partCard.st.changed === null && (page.pending.errors || []).length > 0
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    color: Kirigami.Theme.negativeTextColor
-                    font.family: Kirigami.Theme.fixedWidthFont.family
-                    text: (page.pending.errors || []).join("\n")
+                Repeater {
+                    model: partCard.packages.slice(0, 8)
+                    RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Label { text: modelData.name }
+                        Label {
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            opacity: 0.8
+                            text: modelData.kind.startsWith("A") ? "ajouté" + (modelData.change !== "<none>" ? " (" + modelData.change + ")" : "")
+                                : modelData.kind.startsWith("R") ? "retiré"
+                                : modelData.change + (modelData.kind.startsWith("D") ? " (version plus ancienne)" : "")
+                        }
+                    }
                 }
-                RunProgress { partId: partCard.modelData.key }
-                MonoText {
-                    visible: partCard.showDiff
-                    Layout.preferredHeight: Kirigami.Units.gridUnit * 9
-                    text: partCard.st.diff || ""
+                Label {
+                    visible: partCard.packages.length > 8
+                    opacity: 0.7
+                    text: "… et " + (partCard.packages.length - 8) + " autre(s)"
                 }
                 actions: [
                     Button {
