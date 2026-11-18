@@ -692,8 +692,9 @@ lock_diff_raw() { # ancien, nouveau
 }
 
 # Entrées du flake changées, avec ce qui parle plus qu'un commit : version du
-# paquet principal de l'entrée (packages.<système>.default.version) aux deux
-# commits, quand il y en a un, et nombre de commits entre les deux (GitHub).
+# paquet principal de l'entrée (packages.<système>.default.version), ou à
+# défaut lib.version (version de distribution de nixpkgs), aux deux commits,
+# et nombre de commits entre les deux (GitHub).
 # Résultats gardés dans input-cache.json (un commit ne change pas).
 lock_diff() { # ancien, nouveau
   local json n i type owner repo url from to sys cache fv tv commits
@@ -713,7 +714,7 @@ lock_diff() { # ancien, nouveau
     local r key v
     r=$(ref "$1")
     [ -n "$r" ] && [ "$1" != - ] || return 0
-    key="v:$r"
+    key="v2:$r"
     if v=$(jq -er --arg k "$key" '.[$k] // empty' "$cache" 2>/dev/null); then
       echo "$v"
       return 0
@@ -721,6 +722,9 @@ lock_diff() { # ancien, nouveau
     # Vérification rapide : seulement ce qui est déjà en cache.
     [ -z "${pending_quick:-}" ] || return 0
     v=$(timeout 120 nix eval --raw "$r#packages.$sys.default.version" 2>/dev/null || true)
+    # Sans paquet principal (nixpkgs) : version de la distribution, par
+    # exemple 26.11.20261116.1c872b8.
+    [ -n "$v" ] || v=$(timeout 120 nix eval --raw "$r#lib.version" 2>/dev/null || true)
     jq --arg k "$key" --arg v "$v" '.[$k] = $v' "$cache" | write_json "$cache"
     echo "$v"
   }

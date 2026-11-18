@@ -19,15 +19,18 @@ ScrollView {
     // l'entrée quand elle en a une, et date du commit (avec l'heure si c'est
     // le même jour) ; plus le nombre de commits quand GitHub le donne.
     function revLabel(input) {
-        const loc = Qt.locale("fr_FR");
-        const day = s => s ? new Date(s * 1000).toLocaleDateString(loc, "d MMM") : "?";
-        const time = s => s ? new Date(s * 1000).toLocaleTimeString(loc, "HH:mm") : "";
+        // Ancienneté de la révision actuelle (verrouillée ou installée), en
+        // jours, plutôt que des dates.
+        const age = secs => {
+            if (!secs) return "?";
+            const d = Math.floor((Date.now() / 1000 - secs) / 86400);
+            return d <= 0 ? "aujourd'hui" : d === 1 ? "1 jour" : d + " jours";
+        };
         if (!input.from) return "nouvelle entrée" + (input.toVersion ? " · " + input.toVersion : "");
         const parts = [];
         if (input.fromVersion || input.toVersion)
             parts.push((input.fromVersion || "?") + " → " + (input.toVersion || "?"));
-        const f = input.from.date, t = input.to.date;
-        parts.push(day(f) === day(t) ? day(f) + " " + time(f) + " → " + time(t) : day(f) + " → " + day(t));
+        parts.push("actuelle : " + age(input.from.date));
         if (input.commits) parts.push(input.commits + " commit" + (input.commits > 1 ? "s" : ""));
         return parts.join(" · ");
     }
