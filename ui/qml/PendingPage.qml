@@ -267,7 +267,6 @@ ScrollView {
             }
             visible: (fl.commits || []).length + (fl.dirty || []).length + lockInputs.length > 0
             title: "Modifications du flake"
-            subtitle: "touchent le système et/ou Home Manager, selon leur état ci-dessus"
             Label {
                 visible: (flakeCard.fl.commits || []).length > 0
                 text: "Commits de flake.nix depuis la dernière application"
