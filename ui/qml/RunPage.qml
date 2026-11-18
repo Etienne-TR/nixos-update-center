@@ -64,15 +64,20 @@ ColumnLayout {
     property string selected: ""
     readonly property string current: selected.length > 0 && tasks.some(t => t.id === selected) ? selected : tasks[0].id
 
-    // Barre du haut : bouton de la liste des tâches, toujours à la même
-    // place, que la liste soit affichée ou non.
+    // Bouton de la liste des tâches, toujours à la même place (comme
+    // l'application Claude) : liste affichée, il est en tête de la liste
+    // (la séparation descend alors depuis le haut) ; liste masquée, dans
+    // cette barre au-dessus du détail.
+    component ListToggle: IconAction {
+        iconName: "sidebar-show-symbolic"
+        tooltip: layoutSettings.listHidden ? "Afficher la liste des tâches" : "Masquer la liste des tâches"
+        onClicked: layoutSettings.listHidden = !layoutSettings.listHidden
+    }
     RowLayout {
+        visible: layoutSettings.listHidden
         Layout.fillWidth: true
-        IconAction {
-            iconName: "sidebar-show-symbolic"
-            tooltip: layoutSettings.listHidden ? "Afficher la liste des tâches" : "Masquer la liste des tâches"
-            onClicked: layoutSettings.listHidden = !layoutSettings.listHidden
-        }
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 2
+        ListToggle {}
         Item { Layout.fillWidth: true }
     }
 
@@ -100,8 +105,19 @@ ColumnLayout {
             SplitView.maximumWidth: page.width / 2
             // Largeur choisie en tirant la séparation, gardée.
             SplitView.onPreferredWidthChanged: layoutSettings.listWidth = SplitView.preferredWidth
+            RowLayout {
+                id: listHeader
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: Kirigami.Units.gridUnit * 2
+                ListToggle {}
+                Item { Layout.fillWidth: true }
+            }
             ListView {
-                anchors.fill: parent
+                anchors.top: listHeader.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
                 clip: true
                 model: page.tasks
                 delegate: ItemDelegate {
