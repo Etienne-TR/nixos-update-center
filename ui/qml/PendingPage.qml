@@ -188,7 +188,7 @@ ScrollView {
                         text: partCard.st.changed === true
                               ? ((partCard.st.commits || []).length + (partCard.st.dirty || []).length > 0
                                  ? "La config diffère de la génération installée : « Appliquer » la reconstruira."
-                                 : "Différente de la génération installée (versions du flake.lock ou flake.nix, voir ci-dessous) : « Appliquer » la reconstruira.")
+                                 : "Différente de la génération installée (modifications du flake, voir plus bas) : « Appliquer » la reconstruira.")
                               : partCard.st.changed === false ? "À jour : « Appliquer » sautera cette partie."
                               : (page.pending.time ? "Évaluation en échec." : "Pas encore vérifié.")
                         wrapMode: Text.WordWrap
@@ -226,57 +226,6 @@ ScrollView {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                         font.family: Kirigami.Theme.fixedWidthFont.family
-                    }
-                }
-                // flake.nix et flake.lock : on ne sait pas laquelle des deux
-                // parties ils touchent, donc ils apparaissent dans les deux
-                // quand la partie est à appliquer.
-                readonly property var flakeNix: partCard.st.changed !== true ? []
-                    : ((page.apply.flake || {}).commits || []).filter(c => !(partCard.st.commits || []).some(o => o.hash === c.hash))
-                readonly property bool flakeNixDirty: partCard.st.changed === true && ((page.apply.flake || {}).dirty || []).length > 0
-                Label {
-                    visible: partCard.flakeNix.length > 0 || partCard.flakeNixDirty
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                    text: "Commits de flake.nix depuis la dernière application"
-                    font.bold: true
-                }
-                Repeater {
-                    model: partCard.flakeNix
-                    Label {
-                        required property var modelData
-                        text: modelData.hash + "  " + modelData.subject
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                        font.family: Kirigami.Theme.fixedWidthFont.family
-                    }
-                }
-                Label {
-                    visible: partCard.flakeNixDirty
-                    text: "flake.nix modifié, non committé"
-                    font.family: Kirigami.Theme.fixedWidthFont.family
-                }
-                Label {
-                    visible: partCard.st.changed === true && (partCard.st.inputs || []).length > 0
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                    text: "Versions du flake.lock pas encore installées"
-                    font.bold: true
-                }
-                Repeater {
-                    model: partCard.st.changed === true ? (partCard.st.inputs || []) : []
-                    RowLayout {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        Label { text: modelData.name }
-                        Label {
-                            Layout.fillWidth: true
-                            opacity: 0.8
-                            text: page.revLabel(modelData)
-                        }
-                        Kirigami.UrlButton {
-                            visible: url.length > 0
-                            url: page.compareUrl(modelData)
-                            text: "Changements"
-                        }
                     }
                 }
                 Label {
@@ -317,6 +266,81 @@ ScrollView {
         }
 
         // ── Bloc 2 : nouvelles versions (bouton « Mettre à jour le flake ») ──
+
+        // flake.nix et versions du flake.lock pas encore installées : on ne
+        // sait pas laquelle des deux parties ils touchent (l'état de chacune,
+        // au-dessus, le dit).
+        Card {
+            id: flakeCard
+            readonly property var fl: page.apply.flake || {}
+            readonly property var lockInputs: {
+                const seen = {}, out = [];
+                for (const i of ((page.apply.system || {}).inputs || []).concat((page.apply.home || {}).inputs || []))
+                    if (!seen[i.name]) { seen[i.name] = true; out.push(i); }
+                return out;
+            }
+            visible: (fl.commits || []).length + (fl.dirty || []).length + lockInputs.length > 0
+            title: "Modifications du flake"
+            subtitle: "touchent le système et/ou Home Manager, selon leur état ci-dessus"
+            Label {
+                visible: (flakeCard.fl.commits || []).length > 0
+                text: "Commits de flake.nix depuis la dernière application"
+                font.bold: true
+            }
+            Repeater {
+                model: flakeCard.fl.commits || []
+                Label {
+                    required property var modelData
+                    text: modelData.hash + "  " + modelData.subject
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                    font.family: Kirigami.Theme.fixedWidthFont.family
+                }
+            }
+            Label {
+                visible: (flakeCard.fl.dirty || []).length > 0
+                text: "flake.nix modifié, non committé"
+                font.family: Kirigami.Theme.fixedWidthFont.family
+            }
+            Label {
+                visible: flakeCard.lockInputs.length > 0
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                text: "Versions du flake.lock pas encore installées"
+                font.bold: true
+            }
+            Repeater {
+                model: flakeCard.lockInputs
+                RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Label { text: modelData.name; font.bold: true }
+                    Label {
+                        Layout.fillWidth: true
+                        opacity: 0.8
+                        text: page.revLabel(modelData)
+                    }
+                    Kirigami.UrlButton {
+                        visible: url.length > 0
+                        url: page.compareUrl(modelData)
+                        text: "Changements"
+                    }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                Item { Layout.fillWidth: true }
+                Button {
+                    icon.name: "system-software-update"
+                    text: "Appliquer les modifications"
+                    enabled: !window.running
+                    onClicked: backend.startUpdate(["--system", "--home"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --system --home : système puis Home Manager, chacun sauté si sa génération évaluée est déjà installée ; push des commits, nh clean après un vrai switch."
+                }
+            }
+        }
 
         Card {
             title: "Nouvelles versions disponibles (flake)"
