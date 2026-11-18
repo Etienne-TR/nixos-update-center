@@ -305,20 +305,11 @@ ScrollView {
             }
             Repeater {
                 model: flakeCard.lockInputs
-                RowLayout {
+                InputRow {
                     required property var modelData
-                    Layout.fillWidth: true
-                    Label { text: modelData.name; font.bold: true }
-                    Label {
-                        Layout.fillWidth: true
-                        opacity: 0.8
-                        text: page.revLabel(modelData)
-                    }
-                    Kirigami.UrlButton {
-                        visible: url.length > 0
-                        url: page.compareUrl(modelData)
-                        text: "Changements"
-                    }
+                    input: modelData
+                    label: page.revLabel(modelData)
+                    url: page.compareUrl(modelData)
                 }
             }
             actions: [
@@ -349,19 +340,11 @@ ScrollView {
             }
             Repeater {
                 model: page.upstream.inputs || []
-                RowLayout {
+                InputRow {
                     required property var modelData
-                    Layout.fillWidth: true
-                    Label { text: modelData.name; font.bold: true }
-                    Label {
-                        Layout.fillWidth: true
-                        text: page.revLabel(modelData)
-                    }
-                    Kirigami.UrlButton {
-                        visible: url.length > 0
-                        url: page.compareUrl(modelData)
-                        text: "Changements"
-                    }
+                    input: modelData
+                    label: page.revLabel(modelData)
+                    url: page.compareUrl(modelData)
                 }
             }
             actions: [

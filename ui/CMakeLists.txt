@@ -25,6 +25,7 @@ qt_add_qml_module(${APP_NAME}-ui
     qml/HistoryPage.qml
     qml/SettingsPage.qml
     qml/RunProgress.qml
+    qml/InputRow.qml
     qml/Card.qml
     qml/MonoText.qml
 )
