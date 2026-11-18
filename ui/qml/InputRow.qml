@@ -31,29 +31,21 @@ RowLayout {
         ToolTip.visible: truncated && hover.hovered
         ToolTip.text: row.label
     }
-    ToolButton {
-        icon.name: "download"
+    IconAction {
+        iconName: "go-down-symbolic"
         visible: row.updatable
         opacity: hover.hovered ? 1 : 0
         enabled: !window.running
-        implicitHeight: detail.implicitHeight + Kirigami.Units.smallSpacing
-        implicitWidth: implicitHeight
-        display: AbstractButton.IconOnly
+        tooltip: "update --flake-input " + row.input.name + " : nix flake update " + row.input.name
+                 + " seule, avec commit de flake.lock. Elle passe ensuite dans « Entrées du flake », à appliquer."
         onClicked: backend.updateInput(row.input.name)
-        ToolTip.visible: hovered
-        ToolTip.text: "update --flake-input " + row.input.name + " : nix flake update " + row.input.name
-                      + " seule, avec commit de flake.lock. Elle passe ensuite dans « Entrées du flake », à appliquer."
     }
-    ToolButton {
-        icon.name: "internet-web-browser"
-        // Place gardée : la ligne ne bouge pas quand le bouton apparaît.
+    IconAction {
+        iconName: "insert-link-symbolic"
+        // Place gardée : la ligne ne bouge pas quand l'icône apparaît.
         opacity: row.url.length > 0 && hover.hovered ? 1 : 0
         enabled: row.url.length > 0
-        implicitHeight: detail.implicitHeight + Kirigami.Units.smallSpacing
-        implicitWidth: implicitHeight
-        display: AbstractButton.IconOnly
+        tooltip: "Voir les changements sur GitHub"
         onClicked: Qt.openUrlExternally(row.url)
-        ToolTip.visible: hovered
-        ToolTip.text: "Voir les changements sur GitHub"
     }
 }
