@@ -174,26 +174,12 @@ ScrollView {
                 readonly property var st: page.apply[modelData.key] || {}
                 Layout.fillWidth: true
                 title: modelData.label
+                // État à côté du titre ; le détail (pourquoi) en dessous.
+                subtitle: st.changed === true
+                          ? ((st.commits || []).length + (st.dirty || []).length > 0 ? "● à appliquer" : "● à appliquer (modifications du flake)")
+                          : st.changed === false ? "✓ à jour"
+                          : (page.pending.time ? "? évaluation en échec" : "? pas encore vérifié")
 
-                RowLayout {
-                    Label {
-                        text: partCard.st.changed === true ? "●" : partCard.st.changed === false ? "✓" : "?"
-                        color: partCard.st.changed === true ? Kirigami.Theme.neutralTextColor
-                             : partCard.st.changed === false ? Kirigami.Theme.positiveTextColor
-                             : Kirigami.Theme.disabledTextColor
-                        font.bold: true
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: partCard.st.changed === true
-                              ? ((partCard.st.commits || []).length + (partCard.st.dirty || []).length > 0
-                                 ? "La config diffère de la génération installée : « Appliquer » la reconstruira."
-                                 : "Différente de la génération installée (modifications du flake, voir plus bas) : « Appliquer » la reconstruira.")
-                              : partCard.st.changed === false ? "À jour : « Appliquer » sautera cette partie."
-                              : (page.pending.time ? "Évaluation en échec." : "Pas encore vérifié.")
-                        wrapMode: Text.WordWrap
-                    }
-                }
 
                 // Pourquoi : ce qui a changé depuis la dernière application.
                 Label {
