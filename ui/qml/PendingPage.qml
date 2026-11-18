@@ -292,7 +292,7 @@ ScrollView {
             Label {
                 visible: flakeCard.lockInputs.length > 0
                 Layout.topMargin: Kirigami.Units.smallSpacing
-                text: "Versions du flake.lock pas encore installées"
+                text: "Entrées du flake.lock non installées"
                 font.bold: true
             }
             Repeater {
@@ -330,7 +330,7 @@ ScrollView {
         }
 
         Card {
-            title: "Nouvelles versions des entrées"
+            title: "Nouvelles entrées disponibles"
             badge: (page.upstream.inputs || []).length > 0 ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: (page.upstream.inputs || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flake" }
