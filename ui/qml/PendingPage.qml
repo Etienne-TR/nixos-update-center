@@ -166,8 +166,8 @@ ScrollView {
 
         // ── Bloc 1 : config à appliquer (bouton « Appliquer ») ──
         Repeater {
-            model: [ { key: "system", label: "Modifications du système NixOS" },
-                     { key: "home", label: "Modifications de Home Manager" } ]
+            model: [ { key: "system", label: "Configuration système (NixOS)" },
+                     { key: "home", label: "Configuration utilisateur (Home Manager)" } ]
             Card {
                 id: partCard
                 required property var modelData
