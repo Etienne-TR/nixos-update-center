@@ -72,6 +72,8 @@ int main(int argc, char **argv) {
   QApplication app(argc, argv);
   app.setQuitOnLastWindowClosed(false);
   app.setApplicationName(APP_NAME);
+  // Réglages de l'interface (QSettings, ~/.config/<nom>/<nom>.conf).
+  app.setOrganizationName(APP_NAME);
   app.setApplicationDisplayName(APP_TITLE);
   // app_id Wayland : règle de fenêtre flottante dans niri.
   app.setDesktopFileName(APP_NAME);
