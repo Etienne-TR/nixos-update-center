@@ -183,6 +183,7 @@ ScrollView {
                 // Liste nvd seulement si la partie est à appliquer et qu'une
                 // version de paquet change (sinon nvd ne dit que « No version
                 // … changes »).
+                bodyVisible: st.changed !== false || backend.run.active === true
                 readonly property bool showDiff: st.changed === true && !!st.diff
                     && !/No version or selection state changes/.test(st.diff)
                 badgeColor: st.changed === true ? Kirigami.Theme.neutralTextColor

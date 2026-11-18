@@ -12,8 +12,11 @@ Frame {
     property string badge
     property color badgeColor: Kirigami.Theme.textColor
     default property alias content: inner.data
+    padding: Kirigami.Units.largeSpacing
     // Boutons d'action, alignés à droite sur la ligne du titre.
     property alias actions: actionsRow.data
+    // false : seulement la ligne de titre (section sans contenu à montrer).
+    property bool bodyVisible: true
     Layout.fillWidth: true
 
     ColumnLayout {
@@ -23,11 +26,13 @@ Frame {
 
         RowLayout {
             Layout.fillWidth: true
+            // Ligne de titre un peu plus haute, même sans bouton.
+            Layout.minimumHeight: Kirigami.Units.gridUnit * 2
             visible: card.title.length > 0
             Label {
                 text: card.title
                 font.bold: true
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.1
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.2
             }
             Label {
                 visible: card.badge.length > 0
@@ -49,6 +54,8 @@ Frame {
         }
         ColumnLayout {
             id: inner
+            // Rien à afficher (section à jour) : pas d'espace vide.
+            visible: card.bodyVisible
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
         }
