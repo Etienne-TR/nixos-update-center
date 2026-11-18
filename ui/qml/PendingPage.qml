@@ -110,7 +110,7 @@ ScrollView {
                 ToolTip.text: "journalctl -f -u nixos-update-center-prebuild, dans un terminal."
             },
             Button {
-                visible: !backend.prebuildActive
+                visible: (!backend.prebuildActive) && !window.running
                 icon.name: "run-build"
                 text: "Préparer maintenant"
                 enabled: !window.running
@@ -258,7 +258,7 @@ ScrollView {
                         icon.name: "system-software-update"
                         text: "Appliquer les modifications"
                         enabled: !window.running && (partCard.st.changed !== false)
-                        visible: partCard.st.changed !== false
+                        visible: (partCard.st.changed !== false) && !window.running
                         onClicked: backend.startUpdate([partCard.modelData.key === "system" ? "--system" : "--home"])
                         ToolTip.visible: hovered
                         ToolTip.delay: 500
@@ -326,6 +326,7 @@ ScrollView {
                     icon.name: "system-software-update"
                     text: "Appliquer les modifications"
                     enabled: !window.running
+                    visible: !window.running
                     onClicked: backend.startUpdate(["--system", "--home"])
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
@@ -362,7 +363,7 @@ ScrollView {
                     icon.name: "download"
                     text: "Mettre à jour le flake"
                     enabled: !window.running && (!backend.prebuildActive)
-                    visible: (page.upstream.inputs || []).length > 0 || !page.upstream.checked
+                    visible: ((page.upstream.inputs || []).length > 0 || !page.upstream.checked) && !window.running
                     onClicked: backend.checkUpdates()
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
@@ -392,7 +393,7 @@ ScrollView {
                     icon.name: "system-software-update"
                     text: "Mettre à jour"
                     enabled: !window.running && ((page.pending.flatpaks || []).length > 0)
-                    visible: (page.pending.flatpaks || []).length > 0
+                    visible: ((page.pending.flatpaks || []).length > 0) && !window.running
                     onClicked: backend.startUpdate(["--flatpak"])
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
@@ -414,7 +415,7 @@ ScrollView {
                     icon.name: "system-software-update"
                     text: "Mettre à jour"
                     enabled: !window.running && (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available))
-                    visible: !!(page.pending.claudeDesktop && page.pending.claudeDesktop.available)
+                    visible: (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available)) && !window.running
                     onClicked: backend.startUpdate(["--home"])
                     ToolTip.visible: hovered
                     ToolTip.delay: 500

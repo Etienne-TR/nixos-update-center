@@ -23,24 +23,24 @@ ColumnLayout {
     Layout.topMargin: Kirigami.Units.smallSpacing
     spacing: Kirigami.Units.smallSpacing
 
+    // Partie pas encore commencée : une simple mention.
+    Label {
+        visible: root.partState === "pending"
+        text: "En attente des parties précédentes"
+        opacity: 0.6
+    }
+    // Partie en cours : étape et accès au journal.
     RowLayout {
+        visible: root.partState === "running"
         Layout.fillWidth: true
-        BusyIndicator {
-            visible: root.partState === "running"
-            running: visible
-            implicitHeight: Kirigami.Units.iconSizes.small
-            implicitWidth: implicitHeight
-        }
         Label {
             Layout.fillWidth: true
             elide: Text.ElideRight
-            font.bold: true
-            text: root.partState === "pending" ? "En attente de son tour…" : (root.run.step || "En cours…")
+            text: root.run.step || "En cours…"
         }
-        Button {
-            flat: true
-            icon.name: "utilities-terminal"
-            text: "Journal"
+        IconAction {
+            iconName: "utilities-terminal-symbolic"
+            tooltip: "Voir le journal (onglet En cours)"
             onClicked: window.showRunTab()
         }
     }

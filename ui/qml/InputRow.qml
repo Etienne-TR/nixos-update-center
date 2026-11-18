@@ -33,9 +33,8 @@ RowLayout {
     }
     IconAction {
         iconName: "software-update-available-symbolic"
-        visible: row.updatable
+        visible: row.updatable && !window.running
         opacity: hover.hovered ? 1 : 0
-        enabled: !window.running
         tooltip: "update --flake-input " + row.input.name + " : nix flake update " + row.input.name
                  + " seule, avec commit de flake.lock. Elle passe ensuite dans « Entrées du flake », à appliquer."
         onClicked: backend.updateInput(row.input.name)
