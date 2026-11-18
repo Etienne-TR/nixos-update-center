@@ -176,6 +176,11 @@ ScrollView {
                 title: modelData.label
                 // État : pastille après le titre (● à appliquer, ✓ à jour).
                 badge: st.changed === true ? "●" : st.changed === false ? "✓" : "?"
+                // Liste nvd seulement si la partie est à appliquer et qu'une
+                // version de paquet change (sinon nvd ne dit que « No version
+                // … changes »).
+                readonly property bool showDiff: st.changed === true && !!st.diff
+                    && !/No version or selection state changes/.test(st.diff)
                 badgeColor: st.changed === true ? Kirigami.Theme.neutralTextColor
                           : st.changed === false ? Kirigami.Theme.positiveTextColor
                           : Kirigami.Theme.negativeTextColor
@@ -215,7 +220,7 @@ ScrollView {
                     }
                 }
                 Label {
-                    visible: !!partCard.st.diff
+                    visible: partCard.showDiff
                     Layout.topMargin: Kirigami.Units.smallSpacing
                     text: "Paquets qui changent (construits par la préparation)"
                     font.bold: true
@@ -230,7 +235,7 @@ ScrollView {
                 }
                 RunProgress { partId: partCard.modelData.key }
                 MonoText {
-                    visible: !!partCard.st.diff
+                    visible: partCard.showDiff
                     Layout.preferredHeight: Kirigami.Units.gridUnit * 9
                     text: partCard.st.diff || ""
                 }
