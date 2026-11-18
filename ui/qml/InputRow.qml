@@ -32,7 +32,7 @@ RowLayout {
         ToolTip.text: row.label
     }
     IconAction {
-        iconName: "go-down-symbolic"
+        iconName: "software-update-available-symbolic"
         visible: row.updatable
         opacity: hover.hovered ? 1 : 0
         enabled: !window.running
@@ -41,7 +41,7 @@ RowLayout {
         onClicked: backend.updateInput(row.input.name)
     }
     IconAction {
-        iconName: "insert-link-symbolic"
+        iconName: "web-browser-symbolic"
         // Place gardée : la ligne ne bouge pas quand l'icône apparaît.
         opacity: row.url.length > 0 && hover.hovered ? 1 : 0
         enabled: row.url.length > 0
