@@ -23,6 +23,8 @@
 #include <QThread>
 #include <QDir>
 #include <QFileSystemWatcher>
+#include <QFileInfo>
+#include <QDateTime>
 #include <QPointer>
 #include <QUrl>
 
@@ -278,6 +280,26 @@ int main(int argc, char **argv) {
     });
     QObject::connect(&watcher, &QFileSystemWatcher::fileChanged, &reloadTimer, qOverload<>(&QTimer::start));
     QObject::connect(&watcher, &QFileSystemWatcher::directoryChanged, &reloadTimer, qOverload<>(&QTimer::start));
+    // Filet de sécurité : les notifications du système de fichiers se
+    // perdent quand un fichier est remplacé (git, éditeurs) ; empreinte des
+    // dates de modification relue chaque seconde.
+    static QString lastStamp;
+    auto stamp = [qmlDir] {
+      QString st;
+      for (const QFileInfo &f : QDir(qmlDir).entryInfoList({"*.qml"}, QDir::Files, QDir::Name))
+        st += f.fileName() + QString::number(f.lastModified().toMSecsSinceEpoch()) + ";";
+      return st;
+    };
+    lastStamp = stamp();
+    auto *poll = new QTimer(&app);
+    QObject::connect(poll, &QTimer::timeout, [&reloadTimer, stamp] {
+      const QString st = stamp();
+      if (st != lastStamp) {
+        lastStamp = st;
+        reloadTimer.start();
+      }
+    });
+    poll->start(1000);
   }
 
   // Capture de la fenêtre pour les tests (UPDATE_CENTER_SCREENSHOT=fichier
