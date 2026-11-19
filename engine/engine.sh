@@ -891,8 +891,12 @@ cmd_pending() {
     sys_evaluated=1
   elif [ -n "$same_config" ]; then
     target_sys=$(jq -r '.apply.system.target // ""' "$prev")
-    sys_changed=$(jq -c '.apply.system.changed' "$prev")
-    [ "$sys_changed" = null ] || sys_evaluated=1
+    # Génération évaluée connue : la comparer à celle installée maintenant
+    # (une application a pu avoir lieu depuis).
+    if [ -n "$target_sys" ]; then
+      if [ "$(readlink -f /run/current-system)" = "$target_sys" ]; then sys_changed=false; else sys_changed=true; fi
+      sys_evaluated=1
+    fi
   fi
   if [ -n "$do_home" ]; then
     home_changed=$(differs "$flake#homeConfigurations.$hmconf.activationPackage" \
@@ -901,8 +905,14 @@ cmd_pending() {
     home_evaluated=1
   elif [ -n "$same_config" ]; then
     target_home=$(jq -r '.apply.home.target // ""' "$prev")
-    home_changed=$(jq -c '.apply.home.changed' "$prev")
-    [ "$home_changed" = null ] || home_evaluated=1
+    if [ -n "$target_home" ]; then
+      if [ "$(readlink -f "$HOME/.local/state/nix/profiles/home-manager")" = "$target_home" ]; then
+        home_changed=false
+      else
+        home_changed=true
+      fi
+      home_evaluated=1
+    fi
   fi
 
   # Détail de ce qui est à appliquer, pour chaque partie depuis sa dernière
