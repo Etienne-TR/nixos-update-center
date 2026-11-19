@@ -28,8 +28,8 @@ ScrollView {
         };
         if (!input.from) return "nouvelle entrée" + (input.toVersion ? " · " + input.toVersion : "");
         const parts = [];
-        if (input.fromVersion || input.toVersion)
-            parts.push((input.fromVersion || "?") + " → " + (input.toVersion || "?"));
+        if (input.fromVersion && input.toVersion)
+            parts.push(input.fromVersion + " → " + input.toVersion);
         // « 936 commits (1 jour) » : nombre de commits, puis le retard.
         const l = lag(input.from.date, input.to.date);
         const c = input.commits ? input.commits + " commit" + (input.commits > 1 ? "s" : "") : "";
@@ -359,14 +359,13 @@ ScrollView {
 
         // ── Bloc 2 : nouvelles versions (bouton « Mettre à jour le flake ») ──
 
-        // Mise à jour du flake : tout le chemin d'une entrée au même endroit.
-        // Nouvelle version en ligne → adoptée dans flake.lock → installée
-        // (« Appliquer »). flake.nix modifié : une ligne.
+        // Mise à jour du flake, en deux parties, chacune avec son action :
+        // - disponibles en ligne → « Adopter » (écrire dans flake.lock) ;
+        // - adoptées, à installer (avec les changements de flake.nix, qui
+        //   s'installent de la même façon) → « Appliquer ».
         Card {
             id: flakeCard
             readonly property var fl: page.apply.flake || {}
-            // Adoptées dans flake.lock, pas encore installées (système ou
-            // Home Manager).
             readonly property var lockInputs: {
                 const seen = {}, out = [];
                 for (const i of ((page.apply.system || {}).inputs || []).concat((page.apply.home || {}).inputs || []))
@@ -374,88 +373,98 @@ ScrollView {
                 return out;
             }
             readonly property var online: page.upstream.inputs || []
-            readonly property bool hasChanges: (fl.commits || []).length + (fl.dirty || []).length + lockInputs.length > 0
+            readonly property int nixCommits: (fl.commits || []).length
+            readonly property bool nixDirty: (fl.dirty || []).length > 0
+            readonly property bool hasChanges: nixCommits > 0 || nixDirty || lockInputs.length > 0
             readonly property bool hasOnline: online.length > 0
             title: "Mise à jour du flake"
             bodyVisible: hasChanges || hasOnline || !page.upstream.checked || window.running
             badge: hasChanges || hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: hasChanges || hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flake" }
-            // Nouvelles versions en ligne (▶ au survol : adopter cette entrée).
+
+            // ── Disponibles en ligne ──
+            RowLayout {
+                visible: flakeCard.hasOnline || !page.upstream.checked
+                Layout.fillWidth: true
+                Label {
+                    Layout.fillWidth: true
+                    text: page.upstream.checked ? "Disponibles en ligne" : "En ligne : pas encore recherché (ou réseau indisponible)"
+                    font.bold: page.upstream.checked
+                    opacity: page.upstream.checked ? 1 : 0.7
+                }
+                Button {
+                    icon.name: "media-playback-start-symbolic"
+                    text: "Adopter"
+                    visible: !window.running
+                    enabled: !backend.prebuildActive
+                    onClicked: backend.checkUpdates()
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier (la routine). Rien n'est installé : elles passent dans « Adoptées, à installer »."
+                }
+            }
             Repeater {
                 model: flakeCard.online
                 InputRow {
                     required property var modelData
                     input: modelData
-                    label: page.revLabel(modelData) + " · en ligne"
+                    label: page.revLabel(modelData)
                     url: page.compareUrl(modelData)
                     updatable: true
                 }
             }
-            // Adoptées, à installer.
+
+            // ── Adoptées, à installer ──
+            RowLayout {
+                visible: flakeCard.hasChanges
+                Layout.fillWidth: true
+                Layout.topMargin: flakeCard.hasOnline ? Kirigami.Units.largeSpacing : 0
+                Label {
+                    Layout.fillWidth: true
+                    text: "Adoptées, à installer"
+                    font.bold: true
+                }
+                Button {
+                    icon.name: "media-playback-start-symbolic"
+                    text: "Appliquer"
+                    visible: !window.running
+                    onClicked: backend.startUpdate(["--system", "--home"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --system --home : installer ce qui est adopté dans flake.lock, avec les changements de flake.nix : système puis Home Manager, chacun sauté s'il est déjà à jour."
+                }
+            }
             Repeater {
                 model: flakeCard.lockInputs
                 InputRow {
                     required property var modelData
                     input: modelData
-                    label: page.revLabel(modelData) + " · adoptée, à installer"
+                    label: page.revLabel(modelData)
                     url: page.compareUrl(modelData)
                 }
             }
+            // flake.nix modifié : s'installe avec « Appliquer », comme les
+            // entrées adoptées.
             Label {
-                readonly property int n: (flakeCard.fl.commits || []).length
-                readonly property bool dirty: (flakeCard.fl.dirty || []).length > 0
-                visible: n > 0 || dirty
+                visible: flakeCard.nixCommits > 0 || flakeCard.nixDirty
                 Layout.fillWidth: true
                 elide: Text.ElideRight
-                text: "flake.nix modifié" + (n > 0 ? " (" + n + " commit" + (n > 1 ? "s" : "") + ")" : "")
-                      + (dirty ? (n > 0 ? ", plus des modifications non committées" : ", non committé") : "")
+                text: "flake.nix modifié"
+                      + (flakeCard.nixCommits > 0 ? " (" + flakeCard.nixCommits + " commit" + (flakeCard.nixCommits > 1 ? "s" : "") + ")" : "")
+                      + (flakeCard.nixDirty ? (flakeCard.nixCommits > 0 ? ", plus des modifications non committées" : ", non committé") : "")
                 HoverHandler { id: flakeNixHover }
-                ToolTip.visible: flakeNixHover.hovered && n > 0
+                ToolTip.visible: flakeNixHover.hovered && flakeCard.nixCommits > 0
                 ToolTip.text: (flakeCard.fl.commits || []).map(c => c.hash + "  " + c.subject).join("\n")
             }
-            Label {
-                visible: !page.upstream.checked && !window.running
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                opacity: 0.7
-                text: "Nouvelles versions en ligne pas encore recherchées (ou réseau indisponible)."
-            }
+
             actions: [
                 IconAction {
                     iconName: "view-refresh-symbolic"
                     visible: !window.running
                     enabled: !backend.pendingBusy
-                    tooltip: "Rechercher les nouvelles versions en ligne (nix flake update à blanc, sans toucher flake.lock) et ce qui a changé dans flake.nix et flake.lock (quelques secondes). nixos-update-center-engine pending --only flake"
+                    tooltip: "Rechercher les nouvelles versions en ligne (nix flake update à blanc, sans toucher flake.lock), quelques secondes. Les changements de flake.nix et flake.lock sont vus automatiquement."
                     onClicked: backend.refreshPart("flake")
-                },
-                Button {
-                    icon.name: "media-playback-start-symbolic"
-                    text: "Adopter"
-                    enabled: !backend.prebuildActive
-                    visible: (flakeCard.hasOnline || !page.upstream.checked) && !window.running
-                    onClicked: backend.checkUpdates()
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier (la routine, nixos-update-center-engine weekly --manual). Rien n'est installé."
-                },
-                Button {
-                    icon.name: "media-playback-start-symbolic"
-                    text: "Appliquer"
-                    visible: flakeCard.hasChanges && !window.running
-                    onClicked: backend.startUpdate(["--system", "--home"])
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "update --system --home : installer seulement ce qui est déjà adopté (et flake.nix) : système puis Home Manager, chacun sauté s'il est déjà à jour."
-                },
-                Button {
-                    icon.name: "media-playback-start-symbolic"
-                    text: "Adopter et appliquer"
-                    visible: flakeCard.hasOnline && !window.running
-                    onClicked: backend.startUpdate(["--flake", "--system", "--home"])
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "update --flake --system --home : adopter les nouvelles versions (nix flake update, avec commit), puis tout installer : système puis Home Manager, chacun sauté s'il est déjà à jour."
                 }
             ]
         }
