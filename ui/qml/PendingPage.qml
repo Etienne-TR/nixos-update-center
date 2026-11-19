@@ -477,11 +477,34 @@ ScrollView {
             RunProgress { partId: "flatpak" }
             Repeater {
                 model: page.pending.flatpaks || []
-                Label {
+                // « GIMP  3.2.8 → 3.2.9 · 102,5 Mo (4 jours) » ; même version :
+                // nouvelle compilation.
+                RowLayout {
                     required property var modelData
-                    text: modelData.name + "  (" + modelData.id + ", " + modelData.branch + ")"
-                    elide: Text.ElideRight
                     Layout.fillWidth: true
+                    Label { text: modelData.name; font.bold: true }
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        elide: Text.ElideRight
+                        opacity: 0.8
+                        text: {
+                            const m = modelData, parts = [];
+                            if (m.fromVersion && m.toVersion)
+                                parts.push(m.fromVersion === m.toVersion ? m.toVersion + ", nouvelle compilation" : m.fromVersion + " → " + m.toVersion);
+                            let lag = "";
+                            if (m.fromDate && m.toDate) {
+                                const d = Math.round((m.toDate - m.fromDate) / 86400);
+                                lag = d <= 0 ? "< 1 jour" : d === 1 ? "1 jour" : d + " jours";
+                            }
+                            if (m.size) parts.push(m.size + (lag ? " (" + lag + ")" : ""));
+                            else if (lag) parts.push("(" + lag + ")");
+                            return parts.join(" · ");
+                        }
+                        HoverHandler { id: fpHover }
+                        ToolTip.visible: fpHover.hovered
+                        ToolTip.text: modelData.id + ", " + modelData.branch
+                    }
                 }
             }
             actions: [

@@ -819,6 +819,29 @@ changes() { # partie, dépôt, flake.lock relatif au dépôt, flake relatif, fla
     '{commits: $c[0], dirty: $d[0], inputs: $inputs}'
 }
 
+# Mises à jour Flatpak (installation user), en JSON : id, nom, branche,
+# version installée et disponible, taille à télécharger, dates des deux
+# compilations (secondes).
+flatpak_updates() {
+  local id name branch version size origin ref installed idate rdate
+  # Séparateur non blanc : un champ vide (runtime sans version) ne doit pas
+  # décaler les suivants.
+  flatpak remote-ls --updates --user --columns=application,name,branch,version,download-size,origin,ref 2>/dev/null |
+    tr '\t' '\037' |
+    while IFS=$'\037' read -r id name branch version size origin ref; do
+      [ -n "$ref" ] || continue
+      installed=$(flatpak info --user "$ref" 2>/dev/null)
+      idate=$(sed -nE 's/^ *Date: (.*)$/\1/p' <<<"$installed" | head -n 1)
+      rdate=$(flatpak remote-info --user "$origin" "$ref" 2>/dev/null | sed -nE 's/^ *Date: (.*)$/\1/p' | head -n 1)
+      jq -n --arg id "$id" --arg name "$name" --arg branch "$branch" --arg to "$version" --arg size "$size" \
+        --arg from "$(sed -nE 's/^ *Version: (.*)$/\1/p' <<<"$installed" | head -n 1)" \
+        --argjson fromDate "$( [ -n "$idate" ] && date -d "$idate" +%s || echo null)" \
+        --argjson toDate "$( [ -n "$rdate" ] && date -d "$rdate" +%s || echo null)" \
+        '{id: $id, name: $name, branch: $branch, fromVersion: $from, toVersion: $to, size: $size,
+          fromDate: $fromDate, toDate: $toDate}'
+    done | jq -s .
+}
+
 # Ce qui attend, en trois tests séparés :
 # - config système à appliquer : le système évalué diffère de la génération
 #   active (changement de la config ou du flake.lock déjà committé) ;
@@ -966,9 +989,16 @@ cmd_pending() {
     upstream_ok=true
   fi
 
+  # Flatpaks : aussi toutes les 5 minutes avec la vérification rapide
+  # (quelques secondes).
+  local flatpak_time
+  flatpak_time=$(jq '.flatpakTime // 0' "$prev" 2>/dev/null || echo 0)
+  if [ -n "$pending_quick" ] && [ -z "$do_flatpak" ] && [ $(($(now) - flatpak_time)) -ge 300 ]; then
+    do_flatpak=1
+  fi
   if [ -n "$do_flatpak" ] && [ "$(cfg .flatpak)" = true ]; then
-    flatpaks=$(flatpak remote-ls --updates --user --columns=application,name,branch 2>/dev/null |
-      jq -R 'split("\t") | select(length >= 3) | {id: .[0], name: .[1], branch: .[2]}' | jq -s .)
+    flatpaks=$(flatpak_updates)
+    flatpak_time=$(now)
   fi
 
   if [ -n "$do_claude" ] && [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
@@ -995,7 +1025,8 @@ cmd_pending() {
     --arg tsys "$target_sys" --arg thome "$target_home" --arg head "$head" --arg dirty "$dirty_hash" \
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
-    --argjson flatpaks "$flatpaks" --argjson claude "$claude" --argjson unpushed "$unpushed" \
+    --argjson flatpaks "$flatpaks" --argjson flatpakTime "$flatpak_time" \
+    --argjson claude "$claude" --argjson unpushed "$unpushed" \
     --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
     { time: $time, quickTime: $quickTime, quick: $quick, head: $head, dirtyHash: $dirty,
       apply: {
@@ -1003,7 +1034,7 @@ cmd_pending() {
         home: ({changed: $homec, built: ($homeb != ""), target: $thome, packages: $pkghome} + $homech),
         flake: ($flakech | {commits, dirty}) },
       upstream: {checked: $upok, inputs: $upstream},
-      flatpaks: $flatpaks, claudeDesktop: $claude, unpushed: $unpushed,
+      flatpaks: $flatpaks, flatpakTime: $flatpakTime, claudeDesktop: $claude, unpushed: $unpushed,
       errors: $errors }' |
     tee "$state/pending.json.tmp"
   mv -f "$state/pending.json.tmp" "$state/pending.json"
