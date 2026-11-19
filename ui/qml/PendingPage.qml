@@ -77,6 +77,21 @@ ScrollView {
             }
         }
 
+        // Commits locaux pas encore sur GitHub : une ligne discrète (envoyés
+        // après une application réussie), le détail au survol.
+        Label {
+            readonly property var list: page.pending.unpushed || []
+            visible: list.length > 0
+            Layout.fillWidth: true
+            opacity: 0.7
+            elide: Text.ElideRight
+            text: list.length + " commit" + (list.length > 1 ? "s" : "") + " pas encore envoyé" + (list.length > 1 ? "s" : "")
+                  + " sur GitHub (envoyé" + (list.length > 1 ? "s" : "") + " après une application réussie)"
+            HoverHandler { id: unpushedHover }
+            ToolTip.visible: unpushedHover.hovered
+            ToolTip.text: list.map(c => c.hash + "  " + c.subject).join("\n")
+        }
+
         Card {
             title: "Préparation en arrière-plan"
             subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale") : ""
@@ -439,20 +454,5 @@ ScrollView {
             ]
         }
 
-        Card {
-            visible: (page.pending.unpushed || []).length > 0
-            title: "Commits pas encore envoyés"
-            subtitle: "envoyés après une application réussie"
-            Repeater {
-                model: page.pending.unpushed || []
-                Label {
-                    required property var modelData
-                    text: modelData.hash + "  " + modelData.subject
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                    font.family: Kirigami.Theme.fixedWidthFont.family
-                }
-            }
-        }
     }
 }
