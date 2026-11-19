@@ -125,7 +125,7 @@ ScrollView {
             },
             Button {
                 visible: (!backend.prebuildActive) && !window.running
-                icon.name: "run-build"
+                icon.name: "media-playback-start-symbolic"
                 text: "Préparer maintenant"
                 enabled: !window.running
                 onClicked: backend.startPrebuild()
@@ -282,7 +282,7 @@ ScrollView {
                         onClicked: backend.refreshPart(partCard.modelData.key)
                     },
                     Button {
-                        icon.name: "system-software-update"
+                        icon.name: "media-playback-start-symbolic"
                         text: "Appliquer les modifications"
                         enabled: !window.running && (partCard.st.changed !== false)
                         visible: (partCard.st.changed !== false) && !window.running
@@ -338,7 +338,7 @@ ScrollView {
             }
             actions: [
                 Button {
-                    icon.name: "system-software-update"
+                    icon.name: "media-playback-start-symbolic"
                     text: "Appliquer les modifications"
                     enabled: !window.running
                     visible: !window.running
@@ -382,14 +382,14 @@ ScrollView {
                     onClicked: backend.refreshPart("flake")
                 },
                 Button {
-                    icon.name: "download"
-                    text: "Mettre à jour le flake"
+                    icon.name: "media-playback-start-symbolic"
+                    text: "Verrouiller"
                     enabled: !window.running && (!backend.prebuildActive)
                     visible: ((page.upstream.inputs || []).length > 0 || !page.upstream.checked) && !window.running
                     onClicked: backend.checkUpdates()
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "nixos-update-center-engine weekly --manual (la routine) : update --flake (nix flake update, commit de flake.lock), puis préparation en arrière-plan, puis notification. Rien n'est installé."
+                    ToolTip.text: "Verrouiller les nouvelles versions dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier : la routine, nixos-update-center-engine weekly --manual. Rien n'est installé."
                 }
             ]
         }
@@ -419,7 +419,7 @@ ScrollView {
                     onClicked: backend.refreshPart("flatpak")
                 },
                 Button {
-                    icon.name: "system-software-update"
+                    icon.name: "media-playback-start-symbolic"
                     text: "Mettre à jour"
                     enabled: !window.running && ((page.pending.flatpaks || []).length > 0)
                     visible: ((page.pending.flatpaks || []).length > 0) && !window.running
@@ -441,7 +441,7 @@ ScrollView {
             }
             actions: [
                 Button {
-                    icon.name: "system-software-update"
+                    icon.name: "media-playback-start-symbolic"
                     text: "Mettre à jour"
                     enabled: !window.running && (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available))
                     visible: (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available)) && !window.running
