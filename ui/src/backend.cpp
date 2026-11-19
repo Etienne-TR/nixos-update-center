@@ -62,6 +62,34 @@ Backend::Backend(QObject *parent) : QObject(parent) {
   refreshGenerations();
   refreshRoutine();
   refreshPending(true);
+
+  // Config modifiée (flake.nix, flake.lock, commit, git add…) : vérification
+  // rapide aussitôt, sans attendre les 5 minutes. Empreinte des dates de
+  // modification relue toutes les 3 s.
+  const QVariantMap cfg = readJson(env("UPDATE_CENTER_CONFIG", "/etc/" + name() + "/config.json"));
+  const QString flake = cfg.value("flake").toString();
+  if (!flake.isEmpty()) {
+    QString repo = flake;
+    while (!repo.isEmpty() && repo != "/" && !QFileInfo::exists(repo + "/.git")) repo = QFileInfo(repo).path();
+    // (Pas .git/index : git status, lancé par la vérification, peut le
+    // réécrire et la relancerait sans fin.)
+    m_watched = {flake + "/flake.nix", flake + "/flake.lock", repo + "/.git/HEAD",
+                 repo + "/.git/logs/HEAD"};
+    m_configStamp = configStamp();
+    connect(&m_configTimer, &QTimer::timeout, this, [this] {
+      const QString st = configStamp();
+      if (st == m_configStamp) return;
+      m_configStamp = st;
+      refreshPending(true);
+    });
+    m_configTimer.start(3000);
+  }
+}
+
+QString Backend::configStamp() const {
+  QString st;
+  for (const QString &f : m_watched) st += QString::number(QFileInfo(f).lastModified().toMSecsSinceEpoch()) + ";";
+  return st;
 }
 
 QString Backend::title() const { return QStringLiteral(APP_TITLE); }

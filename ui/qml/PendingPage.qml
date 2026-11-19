@@ -441,14 +441,21 @@ ScrollView {
                 },
                 Button {
                     icon.name: "media-playback-start-symbolic"
-                    text: flakeCard.hasOnline ? "Adopter et appliquer" : "Appliquer"
-                    visible: (flakeCard.hasOnline || flakeCard.hasChanges) && !window.running
-                    onClicked: backend.startUpdate(flakeCard.hasOnline ? ["--flake", "--system", "--home"] : ["--system", "--home"])
+                    text: "Appliquer"
+                    visible: flakeCard.hasChanges && !window.running
+                    onClicked: backend.startUpdate(["--system", "--home"])
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: flakeCard.hasOnline
-                        ? "update --flake --system --home : adopter les nouvelles versions (nix flake update, avec commit), puis les installer : système puis Home Manager, chacun sauté s'il est déjà à jour."
-                        : "update --system --home : installer ce qui a été adopté : système puis Home Manager, chacun sauté s'il est déjà à jour."
+                    ToolTip.text: "update --system --home : installer seulement ce qui est déjà adopté (et flake.nix) : système puis Home Manager, chacun sauté s'il est déjà à jour."
+                },
+                Button {
+                    icon.name: "media-playback-start-symbolic"
+                    text: "Adopter et appliquer"
+                    visible: flakeCard.hasOnline && !window.running
+                    onClicked: backend.startUpdate(["--flake", "--system", "--home"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --flake --system --home : adopter les nouvelles versions (nix flake update, avec commit), puis tout installer : système puis Home Manager, chacun sauté s'il est déjà à jour."
                 }
             ]
         }

@@ -121,6 +121,10 @@ class Backend : public QObject {
   QString m_state, m_engine;
   QTimer m_timer;
   QVariantMap m_routine;
+  QStringList m_watched;
+  QString m_configStamp;
+  QTimer m_configTimer;
+  QString configStamp() const;
   void runPending(const QStringList &args);
   void runEngine(const QStringList &args, std::function<void(int, const QByteArray &)> done);
   QVariantMap m_run, m_build, m_prebuild, m_prebuildResult, m_pending, m_generations;
