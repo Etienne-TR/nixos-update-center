@@ -35,7 +35,7 @@ RowLayout {
         iconName: "media-playback-start-symbolic"
         visible: row.updatable && !window.running
         opacity: hover.hovered ? 1 : 0
-        tooltip: "Verrouiller cette entrée dans flake.lock (update --flake-input " + row.input.name + " : nix flake update " + row.input.name
+        tooltip: "Adopter la nouvelle version de cette entrée dans flake.lock (update --flake-input " + row.input.name + " : nix flake update " + row.input.name
                  + ", avec commit). Elle passe ensuite dans « Entrées du flake », à appliquer."
         onClicked: backend.updateInput(row.input.name)
     }

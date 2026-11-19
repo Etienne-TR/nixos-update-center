@@ -126,7 +126,7 @@ ScrollView {
             Button {
                 visible: (!backend.prebuildActive) && !window.running
                 icon.name: "media-playback-start-symbolic"
-                text: "Préparer maintenant"
+                text: "Préparer"
                 enabled: !window.running
                 onClicked: backend.startPrebuild()
                 ToolTip.visible: hovered
@@ -283,7 +283,7 @@ ScrollView {
                     },
                     Button {
                         icon.name: "media-playback-start-symbolic"
-                        text: "Appliquer les modifications"
+                        text: "Appliquer"
                         enabled: !window.running && (partCard.st.changed !== false)
                         visible: (partCard.st.changed !== false) && !window.running
                         onClicked: backend.startUpdate([partCard.modelData.key === "system" ? "--system" : "--home"])
@@ -339,7 +339,7 @@ ScrollView {
             actions: [
                 Button {
                     icon.name: "media-playback-start-symbolic"
-                    text: "Appliquer les modifications"
+                    text: "Appliquer"
                     enabled: !window.running
                     visible: !window.running
                     onClicked: backend.startUpdate(["--system", "--home"])
@@ -383,13 +383,13 @@ ScrollView {
                 },
                 Button {
                     icon.name: "media-playback-start-symbolic"
-                    text: "Verrouiller"
+                    text: "Adopter"
                     enabled: !window.running && (!backend.prebuildActive)
                     visible: ((page.upstream.inputs || []).length > 0 || !page.upstream.checked) && !window.running
                     onClicked: backend.checkUpdates()
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "Verrouiller les nouvelles versions dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier : la routine, nixos-update-center-engine weekly --manual. Rien n'est installé."
+                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier : la routine, nixos-update-center-engine weekly --manual. Rien n'est installé."
                 }
             ]
         }
