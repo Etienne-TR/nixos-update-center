@@ -29,6 +29,8 @@ class Backend : public QObject {
   Q_PROPERTY(bool pendingBusy READ pendingBusy NOTIFY pendingChanged)
   // Vérification en cours de type rapide (git seulement, moins d'une seconde).
   Q_PROPERTY(bool pendingQuick READ pendingQuick NOTIFY pendingChanged)
+  // Partie vérifiée en ce moment : all, system, home, flake, flatpak.
+  Q_PROPERTY(QString pendingPart READ pendingPart NOTIFY pendingChanged)
   Q_PROPERTY(int pendingCount READ pendingCount NOTIFY pendingChanged)
   Q_PROPERTY(QVariantList history READ history NOTIFY historyChanged)
   Q_PROPERTY(QVariantMap generations READ generations NOTIFY generationsChanged)
@@ -54,6 +56,7 @@ class Backend : public QObject {
   QVariantMap pending() const { return m_pending; }
   bool pendingBusy() const { return m_pendingBusy; }
   bool pendingQuick() const { return m_pendingQuick; }
+  QString pendingPart() const { return m_pendingPart; }
   int pendingCount() const;
   QVariantList history() const { return m_history; }
   QVariantMap generations() const { return m_generations; }
@@ -129,6 +132,7 @@ class Backend : public QObject {
   double m_progress = -1;
   bool m_pendingBusy = false;
   bool m_pendingQuick = false;
+  QString m_pendingPart;
   QDateTime m_pendingMtime, m_historyMtime;
   qint64 m_prebuildSince = 0;
 };

@@ -337,6 +337,7 @@ void Backend::runPending(const QStringList &args) {
   if (m_pendingBusy) return;
   m_pendingBusy = true;
   m_pendingQuick = args.contains("--quick");
+  m_pendingPart = args.indexOf("--only") >= 0 ? args.value(args.indexOf("--only") + 1) : QStringLiteral("all");
   emit pendingChanged();
   auto *p = new QProcess(this);
   connect(p, &QProcess::finished, this, [this, p] {

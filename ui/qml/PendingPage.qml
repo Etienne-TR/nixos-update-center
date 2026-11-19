@@ -104,7 +104,11 @@ ScrollView {
                         elide: Text.ElideRight
                         font.bold: true
                         text: window.running || backend.prebuildActive ? backend.summary
-                            : "Recherche des mises à jour en cours…"
+                            : ({ system: "Vérification de la configuration système…",
+                                 home: "Vérification de la configuration utilisateur…",
+                                 flake: "Recherche des mises à jour des entrées du flake…",
+                                 flatpak: "Recherche des mises à jour Flatpak…" }[backend.pendingPart]
+                               || "Recherche de toutes les mises à jour…")
                     }
                     ProgressBar {
                         visible: window.running || backend.prebuildActive
