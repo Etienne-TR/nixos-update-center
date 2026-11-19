@@ -299,32 +299,8 @@ ScrollView {
             title: "Entrées du flake"
             badge: "●"
             badgeColor: Kirigami.Theme.neutralTextColor
-            Label {
-                visible: (flakeCard.fl.commits || []).length > 0
-                text: "Commits non appliqués (flake.nix)"
-                font.bold: true
-            }
-            Repeater {
-                model: flakeCard.fl.commits || []
-                Label {
-                    required property var modelData
-                    text: modelData.hash + "  " + modelData.subject
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                    font.family: Kirigami.Theme.fixedWidthFont.family
-                }
-            }
-            Label {
-                visible: (flakeCard.fl.dirty || []).length > 0
-                text: "flake.nix modifié, non committé"
-                font.family: Kirigami.Theme.fixedWidthFont.family
-            }
-            Label {
-                visible: flakeCard.lockInputs.length > 0
-                Layout.topMargin: Kirigami.Units.smallSpacing
-                text: "Entrées non installées (flake.lock)"
-                font.bold: true
-            }
+            // Les entrées du flake.lock pas encore installées, puis une seule
+            // ligne si flake.nix a changé (le détail au survol).
             Repeater {
                 model: flakeCard.lockInputs
                 InputRow {
@@ -333,6 +309,18 @@ ScrollView {
                     label: page.revLabel(modelData)
                     url: page.compareUrl(modelData)
                 }
+            }
+            Label {
+                readonly property int n: (flakeCard.fl.commits || []).length
+                readonly property bool dirty: (flakeCard.fl.dirty || []).length > 0
+                visible: n > 0 || dirty
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                text: "flake.nix modifié" + (n > 0 ? " (" + n + " commit" + (n > 1 ? "s" : "") + ")" : "")
+                      + (dirty ? (n > 0 ? ", plus des modifications non committées" : ", non committé") : "")
+                HoverHandler { id: flakeNixHover }
+                ToolTip.visible: flakeNixHover.hovered && n > 0
+                ToolTip.text: (flakeCard.fl.commits || []).map(c => c.hash + "  " + c.subject).join("\n")
             }
             actions: [
                 Button {
