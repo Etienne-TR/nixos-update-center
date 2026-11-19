@@ -76,6 +76,53 @@ ScrollView {
             }
         }
 
+        // Ce qui se passe en ce moment, en haut de l'onglet : mise à jour,
+        // préparation ou recherche, avec l'étape et l'avancement.
+        Frame {
+            id: activity
+            readonly property bool checking: backend.pendingBusy && !backend.pendingQuick
+            visible: window.running || backend.prebuildActive || checking
+            Layout.fillWidth: true
+            background: Rectangle {
+                color: Qt.alpha(Kirigami.Theme.highlightColor, 0.15)
+                radius: Kirigami.Units.cornerRadius
+            }
+            RowLayout {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: Kirigami.Units.largeSpacing
+                BusyIndicator {
+                    running: activity.visible
+                    implicitHeight: Kirigami.Units.iconSizes.medium
+                    implicitWidth: implicitHeight
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+                    Label {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        font.bold: true
+                        text: window.running || backend.prebuildActive ? backend.summary
+                            : "Recherche des mises à jour en cours…"
+                    }
+                    ProgressBar {
+                        visible: window.running || backend.prebuildActive
+                        Layout.fillWidth: true
+                        from: 0; to: 1
+                        indeterminate: backend.progress < 0
+                        value: Math.max(0, backend.progress)
+                    }
+                }
+                IconAction {
+                    visible: window.running || backend.prebuildActive
+                    iconName: "utilities-terminal-symbolic"
+                    tooltip: "Voir le détail et le journal (onglet En cours)"
+                    onClicked: window.showRunTab()
+                }
+            }
+        }
+
         // Commits locaux pas encore sur GitHub : une ligne discrète (envoyés
         // après une application réussie), le détail au survol.
         Label {
@@ -213,6 +260,17 @@ ScrollView {
                           : Kirigami.Theme.negativeTextColor
 
 
+                // Évaluation en échec : la dernière erreur de Nix.
+                Label {
+                    visible: partCard.st.changed === null && (page.pending.errors || []).length > 0
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: Kirigami.Theme.negativeTextColor
+                    font.family: Kirigami.Theme.fixedWidthFont.family
+                    text: (page.pending.errors || []).join("\n")
+                }
+                // Partie en cours de mise à jour : étape et avancement.
+                RunProgress { partId: partCard.modelData.key }
                 // Pourquoi : ce qui a changé depuis la dernière application.
                 Label {
                     visible: (partCard.st.commits || []).length > 0
