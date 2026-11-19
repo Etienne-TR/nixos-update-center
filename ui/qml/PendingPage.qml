@@ -67,12 +67,11 @@ ScrollView {
                 implicitHeight: Kirigami.Units.iconSizes.medium
                 implicitWidth: implicitHeight
             }
-            Button {
-                icon.name: "view-refresh"
-                text: "Rechercher les mises à jour disponibles"
-                ToolTip.visible: hovered
-                ToolTip.text: "Recherche complète (30 à 60 s) : évaluation du système et de Home Manager, nouvelles versions du flake (sans toucher flake.lock), Flatpaks, Claude Desktop. Rien n'est modifié. La config (git) est aussi vérifiée à l'ouverture et toutes les 5 minutes."
+            // Même flèche que dans les sections, ici pour tout vérifier.
+            IconAction {
+                iconName: "view-refresh-symbolic"
                 enabled: !backend.pendingBusy
+                tooltip: "Tout vérifier (30 à 60 s) : évaluation du système et de Home Manager, nouvelles versions des entrées (sans toucher flake.lock), Flatpaks. Rien n'est modifié. La config (git) est aussi vérifiée à l'ouverture et toutes les 5 minutes."
                 onClicked: backend.refreshPending()
             }
         }
