@@ -312,5 +312,10 @@ int main(int argc, char **argv) {
       QCoreApplication::exit(0);
     });
   }
-  return app.exec();
+  const int rc = app.exec();
+  // La fenêtre est détruite après le tray et les autres objets locaux : ses
+  // signaux (visibleChanged à la destruction) ne doivent plus les atteindre,
+  // sinon plantage en quittant (et relance par le service).
+  if (window) QObject::disconnect(window.data(), &QWindow::visibleChanged, nullptr, nullptr);
+  return rc;
 }
