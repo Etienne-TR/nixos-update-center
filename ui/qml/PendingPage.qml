@@ -352,7 +352,7 @@ ScrollView {
         }
 
         Card {
-            title: "Mise à jour du flake"
+            title: "Nouvelles versions des entrées"
             bodyVisible: (page.upstream.inputs || []).length > 0 || !page.upstream.checked || window.running
             badge: (page.upstream.inputs || []).length > 0 ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: (page.upstream.inputs || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
