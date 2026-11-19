@@ -495,12 +495,21 @@ cmd_run() {
   write_run
 
   # Arrêt demandé (`@command@ --stop`, interface) : noté avant de sortir.
-  trap 'run_state=stopped run_finished=$(now); write_run; run_record | jq -c . >>"$history"; exit 143' TERM
+  trap '[ -z "${flatpak_pid:-}" ] || kill "$flatpak_pid" 2>/dev/null; run_state=stopped run_finished=$(now); write_run; run_record | jq -c . >>"$history"; exit 143' TERM
 
   cd "$flake"
   [ -z "$system$home$flatpak$rollback_system_gen$rollback_home_gen" ] || stop_prebuild
 
   local failed="" switch_ok="" switch_ko="" id
+  # Les Flatpaks ne dépendent pas de Nix : avec d'autres parties, ils se
+  # mettent à jour en parallèle, journal à part recopié à la fin.
+  local flatpak_pid="" flatpak_log="$run_log.flatpak"
+  if [ -n "$flatpak" ] && [ "${#part_order[@]}" -gt 1 ]; then
+    part_state[flatpak]=running
+    write_run
+    (part_flatpak) >"$flatpak_log" 2>&1 </dev/null &
+    flatpak_pid=$!
+  fi
   declare -A titles=(
     [flake]="Mise à jour du flake (nix flake update)"
     [system]="Mise à jour du système NixOS"
@@ -510,6 +519,7 @@ cmd_run() {
     [rollback_home]="Retour à une génération Home Manager précédente"
   )
   for id in "${part_order[@]}"; do
+    [ -z "$flatpak_pid" ] || [ "$id" != flatpak ] || continue
     section "${titles[$id]}"
     part_state[$id]=running
     write_run
@@ -524,6 +534,18 @@ cmd_run() {
     fi
     write_run
   done
+
+  if [ -n "$flatpak_pid" ]; then
+    section "${titles[flatpak]} (en parallèle)"
+    if wait "$flatpak_pid"; then part_state[flatpak]=success; else part_state[flatpak]=failed; fi
+    cat "$flatpak_log"
+    rm -f "$flatpak_log"
+    if [ "${part_state[flatpak]}" = failed ]; then
+      echo "*** ${part_label[flatpak]} : échec ***" >&2
+      failed=1
+    fi
+    write_run
+  fi
 
   # Push des commits automatiques seulement si tous les switch ont réussi :
   # un flake.lock qui casse un switch n'est pas publié.
