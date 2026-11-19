@@ -367,10 +367,13 @@ ScrollView {
                     if (!seen[i.name]) { seen[i.name] = true; out.push(i); }
                 return out;
             }
-            visible: (fl.commits || []).length + (fl.dirty || []).length + lockInputs.length > 0
+            // Toujours affichée : ✓ quand flake.nix et flake.lock n'ont rien
+            // de plus que ce qui est installé.
+            readonly property bool hasChanges: (fl.commits || []).length + (fl.dirty || []).length + lockInputs.length > 0
+            bodyVisible: hasChanges
             title: "Entrées du flake"
-            badge: "●"
-            badgeColor: Kirigami.Theme.neutralTextColor
+            badge: hasChanges ? "●" : "✓"
+            badgeColor: hasChanges ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             // Les entrées du flake.lock pas encore installées, puis une seule
             // ligne si flake.nix a changé (le détail au survol).
             Repeater {
@@ -399,7 +402,7 @@ ScrollView {
                     icon.name: "media-playback-start-symbolic"
                     text: "Appliquer"
                     enabled: !window.running
-                    visible: !window.running
+                    visible: flakeCard.hasChanges && !window.running
                     onClicked: backend.startUpdate(["--system", "--home"])
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
