@@ -355,33 +355,46 @@ ScrollView {
 
         // ── Bloc 2 : nouvelles versions (bouton « Mettre à jour le flake ») ──
 
-        // flake.nix et versions du flake.lock pas encore installées : on ne
-        // sait pas laquelle des deux parties ils touchent (l'état de chacune,
-        // au-dessus, le dit).
+        // Mise à jour du flake : tout le chemin d'une entrée au même endroit.
+        // Nouvelle version en ligne → adoptée dans flake.lock → installée
+        // (« Appliquer »). flake.nix modifié : une ligne.
         Card {
             id: flakeCard
             readonly property var fl: page.apply.flake || {}
+            // Adoptées dans flake.lock, pas encore installées (système ou
+            // Home Manager).
             readonly property var lockInputs: {
                 const seen = {}, out = [];
                 for (const i of ((page.apply.system || {}).inputs || []).concat((page.apply.home || {}).inputs || []))
                     if (!seen[i.name]) { seen[i.name] = true; out.push(i); }
                 return out;
             }
-            // Toujours affichée : ✓ quand flake.nix et flake.lock n'ont rien
-            // de plus que ce qui est installé.
+            readonly property var online: page.upstream.inputs || []
             readonly property bool hasChanges: (fl.commits || []).length + (fl.dirty || []).length + lockInputs.length > 0
-            bodyVisible: hasChanges
-            title: "Entrées du flake"
-            badge: hasChanges ? "●" : "✓"
-            badgeColor: hasChanges ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
-            // Les entrées du flake.lock pas encore installées, puis une seule
-            // ligne si flake.nix a changé (le détail au survol).
+            readonly property bool hasOnline: online.length > 0
+            title: "Mise à jour du flake"
+            bodyVisible: hasChanges || hasOnline || !page.upstream.checked || window.running
+            badge: hasChanges || hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
+            badgeColor: hasChanges || hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
+            RunProgress { partId: "flake" }
+            // Nouvelles versions en ligne (▶ au survol : adopter cette entrée).
+            Repeater {
+                model: flakeCard.online
+                InputRow {
+                    required property var modelData
+                    input: modelData
+                    label: page.revLabel(modelData) + " · en ligne"
+                    url: page.compareUrl(modelData)
+                    updatable: true
+                }
+            }
+            // Adoptées, à installer.
             Repeater {
                 model: flakeCard.lockInputs
                 InputRow {
                     required property var modelData
                     input: modelData
-                    label: page.revLabel(modelData)
+                    label: page.revLabel(modelData) + " · adoptée, à installer"
                     url: page.compareUrl(modelData)
                 }
             }
@@ -397,71 +410,44 @@ ScrollView {
                 ToolTip.visible: flakeNixHover.hovered && n > 0
                 ToolTip.text: (flakeCard.fl.commits || []).map(c => c.hash + "  " + c.subject).join("\n")
             }
-            actions: [
-                IconAction {
-                    iconName: "view-refresh-symbolic"
-                    visible: !window.running
-                    enabled: !backend.pendingBusy
-                    tooltip: "Vérifier si flake.nix ou flake.lock ont changé depuis la dernière application (git seulement, moins d'une seconde). nixos-update-center-engine pending --quick"
-                    onClicked: backend.refreshPending(true)
-                },
-                Button {
-                    icon.name: "media-playback-start-symbolic"
-                    text: "Appliquer"
-                    enabled: !window.running
-                    visible: flakeCard.hasChanges && !window.running
-                    onClicked: backend.startUpdate(["--system", "--home"])
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "update --system --home : système puis Home Manager, chacun sauté si sa génération évaluée est déjà installée ; push des commits, nh clean après un vrai switch."
-                }
-            ]
-        }
-
-        Card {
-            title: "Nouvelles versions des entrées"
-            bodyVisible: (page.upstream.inputs || []).length > 0 || !page.upstream.checked || window.running
-            badge: (page.upstream.inputs || []).length > 0 ? "●" : (page.upstream.checked ? "✓" : "")
-            badgeColor: (page.upstream.inputs || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
-            RunProgress { partId: "flake" }
             Label {
-                visible: (page.upstream.inputs || []).length === 0
+                visible: !page.upstream.checked && !window.running
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 opacity: 0.7
-                text: "Pas encore vérifié (ou réseau indisponible)."
-            }
-            Repeater {
-                model: page.upstream.inputs || []
-                InputRow {
-                    required property var modelData
-                    input: modelData
-                    label: page.revLabel(modelData)
-                    url: page.compareUrl(modelData)
-                    updatable: true
-                }
+                text: "Nouvelles versions en ligne pas encore recherchées (ou réseau indisponible)."
             }
             actions: [
                 IconAction {
                     iconName: "view-refresh-symbolic"
                     visible: !window.running
                     enabled: !backend.pendingBusy
-                    tooltip: "Rechercher les nouvelles versions des entrées seulement : nix flake update à blanc, sans toucher flake.lock (quelques secondes). nixos-update-center-engine pending --only flake"
+                    tooltip: "Rechercher les nouvelles versions en ligne (nix flake update à blanc, sans toucher flake.lock) et ce qui a changé dans flake.nix et flake.lock (quelques secondes). nixos-update-center-engine pending --only flake"
                     onClicked: backend.refreshPart("flake")
                 },
                 Button {
                     icon.name: "media-playback-start-symbolic"
                     text: "Adopter"
-                    enabled: !window.running && (!backend.prebuildActive)
-                    visible: ((page.upstream.inputs || []).length > 0 || !page.upstream.checked) && !window.running
+                    enabled: !backend.prebuildActive
+                    visible: (flakeCard.hasOnline || !page.upstream.checked) && !window.running
                     onClicked: backend.checkUpdates()
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier : la routine, nixos-update-center-engine weekly --manual. Rien n'est installé."
+                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier (la routine, nixos-update-center-engine weekly --manual). Rien n'est installé."
+                },
+                Button {
+                    icon.name: "media-playback-start-symbolic"
+                    text: flakeCard.hasOnline ? "Adopter et appliquer" : "Appliquer"
+                    visible: (flakeCard.hasOnline || flakeCard.hasChanges) && !window.running
+                    onClicked: backend.startUpdate(flakeCard.hasOnline ? ["--flake", "--system", "--home"] : ["--system", "--home"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: flakeCard.hasOnline
+                        ? "update --flake --system --home : adopter les nouvelles versions (nix flake update, avec commit), puis les installer : système puis Home Manager, chacun sauté s'il est déjà à jour."
+                        : "update --system --home : installer ce qui a été adopté : système puis Home Manager, chacun sauté s'il est déjà à jour."
                 }
             ]
         }
-
 
         Card {
             title: "Flatpaks"
