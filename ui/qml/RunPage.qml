@@ -30,13 +30,13 @@ ColumnLayout {
         t.push({ id: "run", title: "Mise à jour",
                  state: run.active ? "running" : (run.state || ""),
                  detail: run.active ? (run.step || "en cours")
-                       : run.started ? window.runTitle(run.state).replace("Mise à jour ", "") + ", " + backend.formatTime(run.finished || run.started)
+                       : run.started ? window.runTitle(run.state).replace("Mise à jour ", "") + ", " + window.when(run.finished || run.started)
                        : "aucune" });
         t.push({ id: "prebuild", title: "Préparation en arrière-plan",
                  state: backend.prebuildActive ? "running" : (result.state || ""),
                  detail: backend.prebuildActive ? (pre.fraction >= 0 ? Math.round(pre.fraction * 100) + " %" : "évaluation")
                        : result.state ? ({success: "terminée", failed: "incomplète", stopped: "arrêtée"}[result.state] || result.state)
-                                        + ", " + backend.formatTime(result.time)
+                                        + ", " + window.when(result.time)
                        : "aucune" });
         // Ce qui tourne d'abord.
         return t.filter(x => x.state === "running").concat(t.filter(x => x.state !== "running"));
@@ -163,7 +163,7 @@ ColumnLayout {
                     id: runCard
                     DetailHeader {
                         title: window.runTitle(page.run.active ? "running" : page.run.state)
-                        subtitle: page.run.started ? "lancée " + backend.formatTime(page.run.started) : ""
+                        subtitle: page.run.started ? "lancée " + window.when(page.run.started) : ""
                     }
                     Flow {
                         Layout.fillWidth: true
@@ -221,7 +221,7 @@ ColumnLayout {
                     DetailHeader {
                         title: backend.prebuildActive ? "Préparation en cours" : "Préparation en arrière-plan"
                         subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale")
-                                : page.result.time ? backend.formatTime(page.result.time) : ""
+                                : page.result.time ? window.when(page.result.time) : ""
                     }
                     ProgressBar {
                         visible: backend.prebuildActive

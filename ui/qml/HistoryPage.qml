@@ -30,7 +30,7 @@ ScrollView {
                 }
                 Label {
                     Layout.fillWidth: true
-                    text: backend.formatTime(modelData.time) + (modelData.version ? "  ·  " + modelData.version : "")
+                    text: window.when(modelData.time) + (modelData.version ? "  ·  " + modelData.version : "")
                     elide: Text.ElideRight
                     opacity: 0.8
                 }
@@ -77,7 +77,7 @@ ScrollView {
                         font.bold: true
                     }
                     Label {
-                        text: backend.formatTime(modelData.started)
+                        text: window.when(modelData.started)
                     }
                     Label {
                         Layout.fillWidth: true
@@ -90,7 +90,7 @@ ScrollView {
                         flat: true
                         icon.name: "document-preview"
                         text: "Journal"
-                        onClicked: window.showLog(window.runTitle(modelData.state) + ", " + backend.formatTime(modelData.started), modelData.log)
+                        onClicked: window.showLog(window.runTitle(modelData.state) + ", " + window.when(modelData.started), modelData.log)
                     }
                 }
             }

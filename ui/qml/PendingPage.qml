@@ -54,12 +54,12 @@ ScrollView {
             Label {
                 Layout.fillWidth: true
                 opacity: 0.7
-                text: page.pending.time ? "Dernière recherche " + backend.formatTime(page.pending.time) : "Pas encore de recherche"
+                text: page.pending.time ? "Dernière recherche " + window.when(page.pending.time) : "Pas encore de recherche"
                 // Détail au survol : la config (git) est revérifiée plus souvent.
                 HoverHandler { id: timeHover }
                 ToolTip.visible: timeHover.hovered && !!page.pending.quickTime
-                ToolTip.text: "Recherche complète " + backend.formatTime(page.pending.time)
-                              + "\nConfig (git) vérifiée " + backend.formatTime(page.pending.quickTime)
+                ToolTip.text: "Recherche complète " + window.when(page.pending.time)
+                              + "\nConfig (git) vérifiée " + window.when(page.pending.quickTime)
             }
             BusyIndicator {
                 visible: backend.pendingBusy
@@ -168,7 +168,7 @@ ScrollView {
                     text: {
                         const r = page.result;
                         if (!r.state) return "Aucune préparation pour l'instant. Elle se lance avec la routine hebdomadaire.";
-                        const when = backend.formatTime(r.time);
+                        const when = window.when(r.time);
                         if (r.state === "success") return "Dernière préparation terminée " + when + ".";
                         if (r.state === "failed") return "Dernière préparation incomplète " + when + " : la mise à jour reprendra ce qui manque.";
                         return "Dernière préparation arrêtée " + when + ".";

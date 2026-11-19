@@ -27,6 +27,17 @@ ApplicationWindow {
     onClosing: (close) => { close.accepted = false; window.hide(); }
 
     readonly property bool running: backend.run.active === true
+
+    // Date relative (« aujourd'hui à… », « hier à… ») : recalculée chaque
+    // minute, pour que « aujourd'hui » suive le jour de l'affichage.
+    property real now: Date.now()
+    Timer {
+        interval: 60 * 1000
+        repeat: true
+        running: true
+        onTriggered: window.now = Date.now()
+    }
+    function when(secs) { return window.now, backend.formatTime(secs); }
     // Onglet imposé pour les captures de test.
     property int testTab: -1
     onTestTabChanged: if (testTab >= 0) tabs.currentIndex = testTab
