@@ -398,6 +398,13 @@ ScrollView {
                 ToolTip.text: (flakeCard.fl.commits || []).map(c => c.hash + "  " + c.subject).join("\n")
             }
             actions: [
+                IconAction {
+                    iconName: "view-refresh-symbolic"
+                    visible: !window.running
+                    enabled: !backend.pendingBusy
+                    tooltip: "Vérifier si flake.nix ou flake.lock ont changé depuis la dernière application (git seulement, moins d'une seconde). nixos-update-center-engine pending --quick"
+                    onClicked: backend.refreshPending(true)
+                },
                 Button {
                     icon.name: "media-playback-start-symbolic"
                     text: "Appliquer"
