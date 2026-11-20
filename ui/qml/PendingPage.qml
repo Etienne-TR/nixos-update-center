@@ -124,8 +124,8 @@ ScrollView {
                 return todo.every(p => p.built) ? "ready" : "stale";
             }
             // En cours : seulement les actions ; l'avancement est dans le
-            // bandeau du bas. Rien à appliquer : titre seul.
-            bodyVisible: !backend.prebuildActive && prep !== "none"
+            // bandeau du bas.
+            bodyVisible: !backend.prebuildActive
             subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale")
                     : page.result.time && prep !== "none" ? window.when(page.result.time) : ""
             actions: [
@@ -178,6 +178,7 @@ ScrollView {
                     wrapMode: Text.WordWrap
                     text: {
                         const r = page.result;
+                        if (prepCard.prep === "none") return "Rien à préparer : la configuration installée est à jour.";
                         if (prepCard.prep === "ready") return "Prête : Appliquer n'aura qu'à activer.";
                         if (prepCard.prep === "stale") {
                             if (!r.state) return "Pas encore préparée : Appliquer construira tout.";
