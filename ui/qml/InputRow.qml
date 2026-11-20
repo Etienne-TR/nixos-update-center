@@ -34,7 +34,9 @@ RowLayout {
         // Pas plus large que son texte : les icônes le suivent.
         // Largeur de son texte, tronqué seulement si la ligne manque de place.
         Layout.maximumWidth: Math.max(0, row.width - name.width - 2 * (Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing) - 4 * row.spacing)
-        opacity: 0.8
+        // Ligne survolée : tout le texte en couleur d'accent (cliquable).
+        opacity: hover.hovered && row.url.length > 0 ? 1 : 0.8
+        color: hover.hovered && row.url.length > 0 ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
         elide: Text.ElideMiddle
         text: row.label
         ToolTip.visible: truncated && hover.hovered
@@ -51,8 +53,11 @@ RowLayout {
     IconAction {
         iconName: "help-about-symbolic"
         // Place gardée : la ligne ne bouge pas quand l'icône apparaît.
-        opacity: row.url.length > 0 && hover.hovered ? 1 : 0
+        // Toujours visible quand il y a un lien, et en couleur d'accent avec
+        // la ligne.
+        opacity: row.url.length > 0 ? 1 : 0
         enabled: row.url.length > 0
+        highlighted: hover.hovered
         tooltip: "Voir les changements sur GitHub"
         onClicked: Qt.openUrlExternally(row.url)
     }

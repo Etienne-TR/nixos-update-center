@@ -9,6 +9,8 @@ Item {
     property string iconName
     // Icône de repli si le thème n'a pas la première (Breeze / Adwaita).
     property string fallbackName
+    // Couleur de survol imposée (ligne cliquable survolée).
+    property bool highlighted: false
     property string tooltip
     signal clicked()
     implicitWidth: Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing
@@ -22,7 +24,7 @@ Item {
         fallback: root.fallbackName.length > 0 ? root.fallbackName : "unknown"
         isMask: true
         color: !root.enabled ? Kirigami.Theme.disabledTextColor
-             : mouse.containsMouse ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+             : mouse.containsMouse || root.highlighted ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
     }
     MouseArea {
         id: mouse

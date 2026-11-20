@@ -300,6 +300,7 @@ ScrollView {
                 }
                 IconAction {
                     visible: installLine.clickable
+                    highlighted: installHover.hovered
                     iconName: "help-about-symbolic"
                     tooltip: "Voir les paquets"
                     onClicked: packagesDialog.open()
