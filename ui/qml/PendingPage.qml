@@ -280,9 +280,9 @@ ScrollView {
             // se lit aux boutons de la carte.
             readonly property var repoLines: (page.pending.uncommitted || []).map(f => {
                 const st = f.slice(0, 2), path = f.slice(3);
-                return { text: path, scope: st === "??" || st.includes("A") ? "nouveau"
-                                          : st.includes("D") ? "supprimé" : "modifié" };
-            }).concat(unpushed.map(c => ({ text: page.commitText(c.subject), scope: "non publié" })))
+                return { text: path, mono: true, scope: st === "??" || st.includes("A") ? "nouveau"
+                                                     : st.includes("D") ? "supprimé" : "modifié" };
+            }).concat(unpushed.map(c => ({ text: page.commitText(c.subject), mono: false, scope: "commit non publié" })))
             readonly property var lockInputs: {
                 const seen = {}, out = [];
                 for (const i of (sys.inputs || []).concat(home.inputs || []))
@@ -329,11 +329,12 @@ ScrollView {
                 text: "État du dépôt git"
                 HoverHandler { id: repoHover }
                 ToolTip.visible: repoHover.hovered
-                ToolTip.text: "Modifié : fichier pas encore committé (le centre ne committe que flake.lock, après une application réussie). Non publié : commit pas encore sur GitHub (git push après une application réussie)."
+                ToolTip.text: "Modifié : fichier pas encore committé (le centre ne committe que flake.lock, après une application réussie). Commit non publié : pas encore sur GitHub (git push après une application réussie)."
             }
             Repeater {
                 model: confCard.repoLines
-                ListLine { required property var modelData; text: modelData.text; scope: modelData.scope }
+                // Fichier : chemin en police fixe ; commit : son message.
+                ListLine { required property var modelData; text: modelData.text; mono: modelData.mono; scope: modelData.scope }
             }
 
             // À installer.
