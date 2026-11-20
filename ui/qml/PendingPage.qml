@@ -300,6 +300,12 @@ ScrollView {
                     onClicked: packagesDialog.open()
                 }
             }
+            // Rien à reconstruire : seulement flake.lock ou des commits.
+            ListLine {
+                visible: !confCard.anyChanged && (confCard.needsApply || confCard.unpushed.length > 0)
+                mono: false
+                text: "Aucun paquet à installer"
+            }
             ListLine {
                 visible: confCard.lockInputs.length > 0
                 mono: false
