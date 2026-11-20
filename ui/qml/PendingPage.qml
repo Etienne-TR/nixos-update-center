@@ -278,40 +278,66 @@ ScrollView {
                     url: page.compareUrl(modelData)
                 }
             }
+            // Ce que fera « Appliquer », une ligne par action ; la liste des
+            // paquets s'ouvre avec l'œil.
             Heading {
-                // Entrées adoptées sans effet sur ce qui est installé : la
-                // partie dit qu'aucun paquet ne change.
-                readonly property bool noEffect: confCard.allInstalled && confCard.lockInputs.length > 0
-                visible: confCard.packages.length > 0 || noEffect
-                text: confCard.packages.length === 1 ? "Paquet prêt à installer" : "Paquets prêts à installer"
+                visible: confCard.needsApply || confCard.unpushed.length > 0
+                text: "« Appliquer » va"
             }
-            Label {
-                visible: confCard.allInstalled && confCard.lockInputs.length > 0
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: "Aucun, « Appliquer » va seulement committer et publier flake.lock."
-            }
-            Repeater {
-                model: confCard.packages.slice(0, 8)
-                RowLayout {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    Label { text: modelData.name }
-                    Label {
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        opacity: 0.8
-                        text: modelData.kind.startsWith("A") ? "ajouté" + (modelData.change !== "<none>" ? " (" + modelData.change + ")" : "")
-                            : modelData.kind.startsWith("R") ? "retiré"
-                            : modelData.change + (modelData.kind.startsWith("D") ? " (version plus ancienne)" : "")
-                    }
-                    Label { text: modelData.scope; opacity: 0.6 }
+            ListLine {
+                visible: confCard.anyChanged
+                mono: false
+                text: confCard.packages.length > 0
+                    ? "Installer " + confCard.packages.length + (confCard.packages.length > 1 ? " paquets" : " paquet")
+                    : "Installer la nouvelle configuration"
+                scope: [confCard.sys.changed === true ? "système" : "", confCard.home.changed === true ? "utilisateur" : ""]
+                    .filter(x => x).join(" et ")
+                IconAction {
+                    visible: confCard.packages.length > 0
+                    iconName: "view-visible"
+                    tooltip: "Voir les paquets"
+                    onClicked: packagesDialog.open()
                 }
             }
-            Label {
-                visible: confCard.packages.length > 8
-                opacity: 0.7
-                text: "… et " + (confCard.packages.length - 8) + (confCard.packages.length - 8 > 1 ? " autres" : " autre")
+            ListLine {
+                visible: confCard.lockInputs.length > 0
+                mono: false
+                text: "Committer et publier flake.lock"
+            }
+            ListLine {
+                visible: confCard.unpushed.length > 0
+                mono: false
+                text: "Publier " + (confCard.unpushed.length > 1 ? "les " + confCard.unpushed.length + " commits non publiés" : "le commit non publié")
+            }
+            Dialog {
+                id: packagesDialog
+                parent: Overlay.overlay
+                anchors.centerIn: parent
+                modal: true
+                title: "Paquets prêts à installer"
+                width: Math.min(window.width - 40, Kirigami.Units.gridUnit * 36)
+                height: Math.min(window.height - 40, Kirigami.Units.gridUnit * 30)
+                standardButtons: Dialog.Close
+                ListView {
+                    anchors.fill: parent
+                    clip: true
+                    model: confCard.packages
+                    ScrollBar.vertical: ScrollBar {}
+                    delegate: RowLayout {
+                        required property var modelData
+                        width: ListView.view.width
+                        Label { text: modelData.name }
+                        Label {
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            opacity: 0.8
+                            text: modelData.kind.startsWith("A") ? "ajouté" + (modelData.change !== "<none>" ? " (" + modelData.change + ")" : "")
+                                : modelData.kind.startsWith("R") ? "retiré"
+                                : modelData.change + (modelData.kind.startsWith("D") ? " (version plus ancienne)" : "")
+                        }
+                        Label { text: modelData.scope; opacity: 0.6 }
+                    }
+                }
             }
 
             actions: [
