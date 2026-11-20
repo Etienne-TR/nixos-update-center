@@ -276,13 +276,13 @@ ScrollView {
             // État du dépôt git, une ligne par élément : fichier non committé
             // (« nouveau », « supprimé » selon git status) ou commit non publié.
             // État du dépôt git, une ligne par élément : fichier modifié (pas
-            // committé) ou commit pas encore publié. Ce qui reste à appliquer
+            // committé) ou commit non publié. Ce qui reste à appliquer
             // se lit aux boutons de la carte.
             readonly property var repoLines: (page.pending.uncommitted || []).map(f => {
                 const st = f.slice(0, 2), path = f.slice(3);
                 return { text: path, scope: st === "??" || st.includes("A") ? "nouveau"
                                           : st.includes("D") ? "supprimé" : "modifié" };
-            }).concat(unpushed.map(c => ({ text: page.commitText(c.subject), scope: "committé" })))
+            }).concat(unpushed.map(c => ({ text: page.commitText(c.subject), scope: "non publié" })))
             readonly property var lockInputs: {
                 const seen = {}, out = [];
                 for (const i of (sys.inputs || []).concat(home.inputs || []))
@@ -314,7 +314,7 @@ ScrollView {
                 text: "État du dépôt git"
                 HoverHandler { id: repoHover }
                 ToolTip.visible: repoHover.hovered
-                ToolTip.text: "Modifié : fichier pas encore committé (le centre ne committe que flake.lock, après une application réussie). Committé : commit pas encore publié sur GitHub (git push après une application réussie)."
+                ToolTip.text: "Modifié : fichier pas encore committé (le centre ne committe que flake.lock, après une application réussie). Non publié : commit pas encore sur GitHub (git push après une application réussie)."
             }
             Repeater {
                 model: confCard.repoLines
