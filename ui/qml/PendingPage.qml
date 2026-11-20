@@ -289,7 +289,7 @@ ScrollView {
                 visible: confCard.allInstalled && confCard.lockInputs.length > 0
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: "Aucun : les entrées adoptées ne changent rien à ce qui est installé. Appliquer enregistre seulement flake.lock (commit et push)."
+                text: "Aucun, « Appliquer » va seulement committer et publier flake.lock."
             }
             Repeater {
                 model: confCard.packages.slice(0, 8)
