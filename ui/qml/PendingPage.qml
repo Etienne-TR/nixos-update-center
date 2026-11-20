@@ -282,7 +282,7 @@ ScrollView {
             // paquets s'ouvre avec l'œil.
             Heading {
                 visible: confCard.needsApply || confCard.unpushed.length > 0
-                text: "« Appliquer » va"
+                text: "Actions en attente"
             }
             ListLine {
                 visible: confCard.anyChanged
