@@ -396,40 +396,40 @@ ScrollView {
                     onClicked: backend.refreshPart("config")
                 },
                 // « Appliquer » : les deux parties (une partie à jour est
-                // sautée). La flèche à côté, quand les deux sont à appliquer,
-                // propose une seule partie.
-                Button {
-                    icon.name: "media-playback-start-symbolic"
-                    text: "Appliquer"
+                // sautée). Bouton divisé : la flèche collée à droite, quand les
+                // deux sont à appliquer, propose une seule partie.
+                RowLayout {
                     visible: !confCard.allInstalled && !window.running
-                    onClicked: backend.startUpdate(["--system", "--home"])
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "update --system --home : système puis Home Manager ; une partie déjà à jour est sautée. Ensuite commit de flake.lock s'il a changé, push des commits, nh clean."
-                },
-                ToolButton {
-                    id: partMenuButton
-                    icon.name: "pan-down-symbolic"
-                    visible: confCard.sys.changed !== false && confCard.home.changed !== false && !window.running
-                    onClicked: partMenu.popup(partMenuButton, 0, partMenuButton.height)
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "Appliquer une seule partie"
-                    Menu {
-                        id: partMenu
-                        MenuItem {
-                            text: "Système seulement"
-                            onTriggered: backend.startUpdate(["--system"])
-                            ToolTip.visible: hovered
-                            ToolTip.delay: 500
-                            ToolTip.text: "update --system : niri patché, nix build du système, sudo nixos-update-center-root switch-to, puis commit de flake.lock s'il a changé, push, nh clean."
-                        }
-                        MenuItem {
-                            text: "Utilisateur seulement"
-                            onTriggered: backend.startUpdate(["--home"])
-                            ToolTip.visible: hovered
-                            ToolTip.delay: 500
-                            ToolTip.text: "update --home : Claude Desktop, modèle Voxtype, nix build de Home Manager, home-manager switch, puis commit de flake.lock s'il a changé, push, nh clean."
+                    spacing: 0
+                    Button {
+                        icon.name: "media-playback-start-symbolic"
+                        text: "Appliquer"
+                        onClicked: backend.startUpdate(["--system", "--home"])
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 500
+                        ToolTip.text: "update --system --home : système puis Home Manager ; une partie déjà à jour est sautée. Ensuite commit de flake.lock s'il a changé, push des commits, nh clean."
+                    }
+                    Button {
+                        id: partMenuButton
+                        visible: confCard.sys.changed !== false && confCard.home.changed !== false
+                        icon.name: "pan-down-symbolic"
+                        display: AbstractButton.IconOnly
+                        implicitWidth: implicitHeight * 0.8
+                        Layout.leftMargin: -1
+                        onClicked: partMenu.popup(partMenuButton, 0, partMenuButton.height)
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 500
+                        ToolTip.text: "Appliquer une seule partie"
+                        Menu {
+                            id: partMenu
+                            MenuItem {
+                                text: "Système seulement"
+                                onTriggered: backend.startUpdate(["--system"])
+                            }
+                            MenuItem {
+                                text: "Utilisateur seulement"
+                                onTriggered: backend.startUpdate(["--home"])
+                            }
                         }
                     }
                 }
