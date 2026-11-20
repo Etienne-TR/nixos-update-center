@@ -307,13 +307,6 @@ ScrollView {
             }
 
             actions: [
-                IconAction {
-                    iconName: "view-refresh-symbolic"
-                    visible: !window.running
-                    enabled: !backend.pendingBusy
-                    tooltip: "Vérifier la configuration : évaluation du système et de Home Manager (environ 20 s), comparées aux générations installées. nixos-update-center-engine pending --only config"
-                    onClicked: backend.refreshPart("config")
-                },
                 // « Appliquer » : les deux parties (une partie à jour est
                 // sautée). Bouton divisé : la flèche collée à droite, quand les
                 // deux sont à appliquer, propose une seule partie.
@@ -351,6 +344,12 @@ ScrollView {
                             }
                         }
                     }
+                },
+                IconAction {
+                    iconName: "view-refresh-symbolic"
+                    enabled: !window.running && !backend.pendingBusy
+                    tooltip: "Vérifier la configuration : évaluation du système et de Home Manager (environ 20 s), comparées aux générations installées. nixos-update-center-engine pending --only config"
+                    onClicked: backend.refreshPart("config")
                 }
             ]
         }
@@ -402,8 +401,7 @@ ScrollView {
             actions: [
                 IconAction {
                     iconName: "view-refresh-symbolic"
-                    visible: !window.running
-                    enabled: !backend.pendingBusy
+                    enabled: !window.running && !backend.pendingBusy
                     tooltip: "Rechercher les nouvelles versions en ligne (nix flake update à blanc, sans toucher flake.lock), quelques secondes. Les changements de flake.nix et flake.lock sont vus automatiquement."
                     onClicked: backend.refreshPart("flake")
                 }
@@ -454,13 +452,6 @@ ScrollView {
                 }
             }
             actions: [
-                IconAction {
-                    iconName: "view-refresh-symbolic"
-                    visible: !fpCard.busy
-                    enabled: !backend.pendingBusy
-                    tooltip: "Rechercher les mises à jour Flatpak seulement : flatpak remote-ls --updates --user. nixos-update-center-engine pending --only flatpak"
-                    onClicked: backend.refreshPart("flatpak")
-                },
                 // Possible pendant une exécution Nix (adopter, appliquer) :
                 // les Flatpaks ont leur propre unité.
                 Button {
@@ -471,6 +462,12 @@ ScrollView {
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
                     ToolTip.text: "nixos-update-center-engine flatpak-update (unité nixos-update-center-flatpak) : flatpak update --user, puis flatpak uninstall --user --unused. Possible pendant une mise à jour Nix."
+                },
+                IconAction {
+                    iconName: "view-refresh-symbolic"
+                    enabled: !fpCard.busy && !backend.pendingBusy
+                    tooltip: "Rechercher les mises à jour Flatpak seulement : flatpak remote-ls --updates --user. nixos-update-center-engine pending --only flatpak"
+                    onClicked: backend.refreshPart("flatpak")
                 }
             ]
         }

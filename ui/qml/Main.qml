@@ -138,6 +138,9 @@ ApplicationWindow {
             // sien) ; la recherche en cours s'affiche dans le bandeau du bas.
             IconAction {
                 visible: tabs.currentIndex === 0
+                // Aligné sur les flèches des cartes (marge de la page et des
+                // cartes).
+                Layout.rightMargin: Kirigami.Units.largeSpacing + Kirigami.Units.smallSpacing
                 iconName: "view-refresh-symbolic"
                 enabled: !backend.pendingBusy
                 tooltip: "Tout vérifier (30 à 60 s) : configuration Nix, nouvelles versions en ligne, Flatpaks. Rien n'est modifié."
