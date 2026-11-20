@@ -389,33 +389,43 @@ ScrollView {
                     tooltip: "Vérifier la configuration : évaluation du système et de Home Manager (environ 20 s), comparées aux générations installées. nixos-update-center-engine pending --only config"
                     onClicked: backend.refreshPart("config")
                 },
-                // Une partie seule, quand les deux sont à appliquer ; sinon
-                // « Appliquer » suffit (une partie à jour est sautée).
-                Button {
-                    text: "Système"
-                    visible: confCard.sys.changed !== false && confCard.home.changed !== false && !window.running
-                    onClicked: backend.startUpdate(["--system"])
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "update --system : évaluation, niri patché, nix build du système, sudo nixos-update-center-root switch-to (switch-to-configuration switch), puis commit de flake.lock s'il a changé, push, nh clean."
-                },
-                Button {
-                    text: "Utilisateur"
-                    visible: confCard.sys.changed !== false && confCard.home.changed !== false && !window.running
-                    onClicked: backend.startUpdate(["--home"])
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "update --home : Claude Desktop, modèle Voxtype, nix build de Home Manager, home-manager switch, puis commit de flake.lock s'il a changé, push, nh clean."
-                },
+                // « Appliquer » : les deux parties (une partie à jour est
+                // sautée). La flèche à côté, quand les deux sont à appliquer,
+                // propose une seule partie.
                 Button {
                     icon.name: "media-playback-start-symbolic"
-                    text: confCard.sys.changed !== false && confCard.home.changed !== false ? "Tout"
-                        : confCard.sys.changed !== false ? "Appliquer (système)" : "Appliquer (utilisateur)"
+                    text: "Appliquer"
                     visible: !confCard.allInstalled && !window.running
                     onClicked: backend.startUpdate(["--system", "--home"])
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
                     ToolTip.text: "update --system --home : système puis Home Manager ; une partie déjà à jour est sautée. Ensuite commit de flake.lock s'il a changé, push des commits, nh clean."
+                },
+                ToolButton {
+                    id: partMenuButton
+                    icon.name: "pan-down-symbolic"
+                    visible: confCard.sys.changed !== false && confCard.home.changed !== false && !window.running
+                    onClicked: partMenu.popup(partMenuButton, 0, partMenuButton.height)
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "Appliquer une seule partie"
+                    Menu {
+                        id: partMenu
+                        MenuItem {
+                            text: "Système seulement"
+                            onTriggered: backend.startUpdate(["--system"])
+                            ToolTip.visible: hovered
+                            ToolTip.delay: 500
+                            ToolTip.text: "update --system : niri patché, nix build du système, sudo nixos-update-center-root switch-to, puis commit de flake.lock s'il a changé, push, nh clean."
+                        }
+                        MenuItem {
+                            text: "Utilisateur seulement"
+                            onTriggered: backend.startUpdate(["--home"])
+                            ToolTip.visible: hovered
+                            ToolTip.delay: 500
+                            ToolTip.text: "update --home : Claude Desktop, modèle Voxtype, nix build de Home Manager, home-manager switch, puis commit de flake.lock s'il a changé, push, nh clean."
+                        }
+                    }
                 }
             ]
         }
