@@ -4,8 +4,8 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 // Une entrée du flake : nom, versions ou dates (tronquées si trop longues,
-// texte complet au survol) et, au survol de la ligne, un bouton vers les
-// changements sur GitHub.
+// texte complet au survol). Toute la ligne est cliquable (changements sur
+// GitHub) ; les icônes suivent le texte et apparaissent au survol.
 RowLayout {
     id: row
     required property var input
@@ -15,15 +15,25 @@ RowLayout {
     property bool updatable: false
     Layout.fillWidth: true
 
-    HoverHandler { id: hover }
+    HoverHandler {
+        id: hover
+        cursorShape: row.url.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+    }
+    TapHandler {
+        enabled: row.url.length > 0
+        onTapped: Qt.openUrlExternally(row.url)
+    }
 
     Label {
+        id: name
         text: row.input.name
+        color: hover.hovered && row.url.length > 0 ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
     }
     Label {
         id: detail
-        Layout.fillWidth: true
-        Layout.minimumWidth: 0
+        // Pas plus large que son texte : les icônes le suivent.
+        // Largeur de son texte, tronqué seulement si la ligne manque de place.
+        Layout.maximumWidth: Math.max(0, row.width - name.width - 2 * (Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing) - 4 * row.spacing)
         opacity: 0.8
         elide: Text.ElideMiddle
         text: row.label
@@ -46,4 +56,5 @@ RowLayout {
         tooltip: "Voir les changements sur GitHub"
         onClicked: Qt.openUrlExternally(row.url)
     }
+    Item { Layout.fillWidth: true; Layout.preferredWidth: 0 }
 }

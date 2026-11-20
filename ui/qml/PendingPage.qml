@@ -283,19 +283,32 @@ ScrollView {
                 visible: confCard.needsApply || confCard.unpushed.length > 0
                 text: "Actions en attente"
             }
-            ListLine {
+            // Ligne cliquable (liste des paquets) quand la préparation l'a
+            // calculée ; le « i » suit le texte.
+            RowLayout {
+                id: installLine
+                readonly property bool clickable: confCard.packages.length > 0
                 visible: confCard.anyChanged
-                mono: false
-                text: confCard.packages.length > 0
-                    ? "Installation de " + confCard.packages.length + (confCard.packages.length > 1 ? " paquets" : " paquet")
-                    : "Installation de la nouvelle configuration"
-                scope: [confCard.sys.changed === true ? "système" : "", confCard.home.changed === true ? "utilisateur" : ""]
-                    .filter(x => x).join(" et ")
+                Layout.fillWidth: true
+                HoverHandler { id: installHover; cursorShape: installLine.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor }
+                TapHandler { enabled: installLine.clickable; onTapped: packagesDialog.open() }
+                Label {
+                    color: installHover.hovered && installLine.clickable ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                    text: confCard.packages.length > 0
+                        ? "Installation de " + confCard.packages.length + (confCard.packages.length > 1 ? " paquets" : " paquet")
+                        : "Installation de la nouvelle configuration"
+                }
                 IconAction {
-                    visible: confCard.packages.length > 0
+                    visible: installLine.clickable
                     iconName: "help-about-symbolic"
                     tooltip: "Voir les paquets"
                     onClicked: packagesDialog.open()
+                }
+                Item { Layout.fillWidth: true; Layout.preferredWidth: 0 }
+                Label {
+                    opacity: 0.6
+                    text: [confCard.sys.changed === true ? "système" : "", confCard.home.changed === true ? "utilisateur" : ""]
+                        .filter(x => x).join(" et ")
                 }
             }
             // Rien à reconstruire : seulement flake.lock ou des commits.
