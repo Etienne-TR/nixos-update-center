@@ -273,16 +273,12 @@ ScrollView {
                 return inSys && inHome ? "système et utilisateur" : inSys ? "système" : inHome ? "utilisateur" : "";
             }
             readonly property var unpushed: page.pending.unpushed || []
-            // État du dépôt git, une ligne par élément : fichier non committé
-            // (« nouveau », « supprimé » selon git status) ou commit non publié.
-            // État du dépôt git, une ligne par élément : fichier modifié (pas
-            // committé) ou commit non publié. Ce qui reste à appliquer
-            // se lit aux boutons de la carte.
-            readonly property var repoLines: (page.pending.uncommitted || []).map(f => {
-                const st = f.slice(0, 2), path = f.slice(3);
-                return { text: path, mono: true, scope: st === "??" || st.includes("A") ? "nouveau"
-                                                     : st.includes("D") ? "supprimé" : "modifié" };
-            }).concat(unpushed.map(c => ({ text: page.commitText(c.subject), mono: false, scope: "commit non publié" })))
+            // État du dépôt git : fichiers modifiés (pas committés), avec
+            // « nouveau » ou « supprimé » selon git, et commits non publiés.
+            readonly property var files: (page.pending.uncommitted || []).map(f => {
+                const st = f.slice(0, 2);
+                return { text: f.slice(3), scope: st === "??" || st.includes("A") ? "nouveau" : st.includes("D") ? "supprimé" : "" };
+            })
             readonly property var lockInputs: {
                 const seen = {}, out = [];
                 for (const i of (sys.inputs || []).concat(home.inputs || []))
@@ -324,17 +320,27 @@ ScrollView {
             }
 
             Heading {
-                visible: confCard.repoLines.length > 0
+                visible: confCard.files.length > 0
                 Layout.topMargin: 0
-                text: "État du dépôt git"
-                HoverHandler { id: repoHover }
-                ToolTip.visible: repoHover.hovered
-                ToolTip.text: "Modifié : fichier pas encore committé (le centre ne committe que flake.lock, après une application réussie). Commit non publié : pas encore sur GitHub (git push après une application réussie)."
+                text: confCard.files.length > 1 ? "Fichiers modifiés" : "Fichier modifié"
+                HoverHandler { id: filesHover }
+                ToolTip.visible: filesHover.hovered
+                ToolTip.text: "Pas encore committés. Le centre ne committe que flake.lock, après une application réussie."
             }
             Repeater {
-                model: confCard.repoLines
-                // Fichier : chemin en police fixe ; commit : son message.
-                ListLine { required property var modelData; text: modelData.text; mono: modelData.mono; scope: modelData.scope }
+                model: confCard.files
+                ListLine { required property var modelData; text: modelData.text; mono: false; scope: modelData.scope }
+            }
+            Heading {
+                visible: confCard.unpushed.length > 0
+                text: confCard.unpushed.length > 1 ? "Commits non publiés" : "Commit non publié"
+                HoverHandler { id: unpushedHover }
+                ToolTip.visible: unpushedHover.hovered
+                ToolTip.text: "Pas encore sur GitHub : publiés par git push après une application réussie."
+            }
+            Repeater {
+                model: confCard.unpushed
+                ListLine { required property var modelData; text: page.commitText(modelData.subject); mono: false }
             }
 
             // À installer.
