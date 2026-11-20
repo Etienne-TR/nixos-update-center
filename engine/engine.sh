@@ -1141,8 +1141,10 @@ cmd_pending() {
     --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
     { time: $time, quickTime: $quickTime, quick: $quick, head: $head, dirtyHash: $dirty,
       apply: {
-        system: ({changed: $sysc, built: ($sysb != ""), target: $tsys, packages: $pkgsys} + $sysch),
-        home: ({changed: $homec, built: ($homeb != ""), target: $thome, packages: $pkghome} + $homech),
+        # built : la préparation a construit exactement la génération de la
+        # config actuelle (inconnue tant qu'elle n'est pas évaluée).
+        system: ({changed: $sysc, built: ($sysb != "" and $sysb == $tsys), target: $tsys, packages: $pkgsys} + $sysch),
+        home: ({changed: $homec, built: ($homeb != "" and $homeb == $thome), target: $thome, packages: $pkghome} + $homech),
         flake: ($flakech | {commits, dirty}) },
       upstream: {checked: $upok, inputs: $upstream},
       claudeDesktop: $claude, unpushed: $unpushed,
