@@ -111,6 +111,8 @@ write_json() { # chemin ; JSON sur l'entrée standard
 # État de l'exécution, réécrit à chaque changement dans run.json.
 run_id="" run_state="" run_step="" run_started=0 run_finished="null" run_log=""
 run_progress="null"
+# Journal des Flatpaks tant qu'ils tournent en parallèle.
+run_flatpak_log=""
 part_order=()
 declare -A part_label=() part_state=()
 notes=()
@@ -130,10 +132,10 @@ run_record() {
   jq -n --arg id "$run_id" --arg state "$run_state" --arg step "$run_step" \
     --argjson started "$run_started" --argjson finished "$run_finished" \
     --argjson parts "$(parts_json)" --argjson notes "$(notes_json)" \
-    --arg log "$run_log" --argjson progress "$run_progress" --argjson pid "$$" \
+    --arg log "$run_log" --arg flatpakLog "$run_flatpak_log" --argjson progress "$run_progress" --argjson pid "$$" \
     '{id: $id, state: $state, step: $step, started: $started,
       finished: $finished, parts: $parts, notes: $notes, log: $log,
-      progress: $progress, pid: $pid}'
+      flatpakLog: $flatpakLog, progress: $progress, pid: $pid}'
 }
 
 write_run() { run_record | write_json "$run_json"; }
@@ -503,9 +505,9 @@ cmd_run() {
   local failed="" switch_ok="" switch_ko="" id
   # Les Flatpaks ne dépendent pas de Nix : avec d'autres parties, ils se
   # mettent à jour en parallèle, journal à part recopié à la fin.
-  local flatpak_pid="" flatpak_log="$run_log.flatpak"
+  local flatpak_pid="" flatpak_log="$state/runs/$run_id.flatpak"
   if [ -n "$flatpak" ] && [ "${#part_order[@]}" -gt 1 ]; then
-    part_state[flatpak]=running
+    part_state[flatpak]=running run_flatpak_log="$flatpak_log"
     write_run
     (part_flatpak) >"$flatpak_log" 2>&1 </dev/null &
     flatpak_pid=$!
@@ -540,6 +542,7 @@ cmd_run() {
     if wait "$flatpak_pid"; then part_state[flatpak]=success; else part_state[flatpak]=failed; fi
     cat "$flatpak_log"
     rm -f "$flatpak_log"
+    run_flatpak_log=""
     if [ "${part_state[flatpak]}" = failed ]; then
       echo "*** ${part_label[flatpak]} : échec ***" >&2
       failed=1

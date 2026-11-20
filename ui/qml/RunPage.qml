@@ -32,6 +32,10 @@ ColumnLayout {
                  detail: run.active ? (run.step || "en cours")
                        : run.started ? window.runTitle(run.state).replace("Mise à jour ", "") + ", " + window.when(run.finished || run.started)
                        : "aucune" });
+        // Flatpaks en parallèle de la mise à jour : tâche à part, avec son
+        // journal.
+        if (run.active && run.flatpakLog)
+            t.push({ id: "flatpak", title: "Mise à jour des Flatpaks", state: "running", detail: "en parallèle" });
         t.push({ id: "prebuild", title: "Préparation en arrière-plan",
                  state: backend.prebuildActive ? "running" : (result.state || ""),
                  detail: backend.prebuildActive ? (pre.fraction >= 0 ? Math.round(pre.fraction * 100) + " %" : "évaluation")
@@ -145,7 +149,7 @@ ColumnLayout {
         // Détail de la tâche choisie.
         StackLayout {
             SplitView.fillWidth: true
-            currentIndex: page.current === "prebuild" ? 1 : page.current === "check" ? 2 : 0
+            currentIndex: page.current === "prebuild" ? 1 : page.current === "check" ? 2 : page.current === "flatpak" ? 3 : 0
 
             // Mise à jour : parties, étape, avancement, journal.
             ColumnLayout {
@@ -278,6 +282,32 @@ ColumnLayout {
                     }
                 }
                 Item { Layout.fillHeight: true }
+            }
+
+            // Flatpaks en parallèle : leur journal, relu chaque seconde (il
+            // rejoint celui de la mise à jour une fois terminés).
+            ColumnLayout {
+                id: flatpakDetail
+                spacing: Kirigami.Units.largeSpacing
+                property string log: ""
+                DetailHeader {
+                    title: "Mise à jour des Flatpaks"
+                    subtitle: "en parallèle de la mise à jour"
+                }
+                MonoText {
+                    Layout.fillHeight: true
+                    follow: true
+                    text: flatpakDetail.log.length > 0 ? flatpakDetail.log : "Le journal des Flatpaks s'affichera ici."
+                }
+                Timer {
+                    interval: 1000
+                    repeat: true
+                    triggeredOnStart: true
+                    running: window.visible && page.visible && page.current === "flatpak"
+                    // Barres de progression (\r) : seul leur dernier état.
+                    onTriggered: flatpakDetail.log = backend.readLog(page.run.flatpakLog)
+                        .split("\n").map(l => l.split("\r").pop()).join("\n")
+                }
             }
         }
     }
