@@ -297,7 +297,7 @@ ScrollView {
             readonly property var packages: (sys.changed === true ? (sys.packages || []).map(p => Object.assign({ scope: "système" }, p)) : [])
                 .concat(home.changed === true ? (home.packages || []).map(p => Object.assign({ scope: "utilisateur" }, p)) : [])
 
-            title: "Configuration"
+            title: "Configuration Nix"
             badge: anyChanged ? "●" : allInstalled ? "✓" : "?"
             badgeColor: anyChanged ? Kirigami.Theme.neutralTextColor
                       : allInstalled ? Kirigami.Theme.positiveTextColor
@@ -448,7 +448,7 @@ ScrollView {
                     onClicked: backend.checkUpdates()
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update), puis, préparer en arrière-plan et notifier (la routine). Rien n'est installé ni committé : flake.lock passe dans « Configuration », committé et publié après une application réussie."
+                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update), puis, préparer en arrière-plan et notifier (la routine). Rien n'est installé ni committé : flake.lock passe dans « Configuration Nix », committé et publié après une application réussie."
                 }
             }
             Repeater {
