@@ -15,12 +15,12 @@ ApplicationWindow {
     // Vérification rapide (git seulement) à l'ouverture de la fenêtre et
     // toutes les 5 minutes tant qu'elle est ouverte ; la complète se lance
     // par le bouton « Rechercher ».
-    onVisibleChanged: if (visible && !backend.pendingBusy) backend.refreshPending(true)
+    onVisibleChanged: if (visible) backend.refreshPending(true)
     Timer {
         interval: 5 * 60 * 1000
         repeat: true
         running: window.visible
-        onTriggered: if (!backend.pendingBusy) backend.refreshPending(true)
+        onTriggered: backend.refreshPending(true)
     }
 
     // Fermer la fenêtre la cache : l'icône reste dans le tray.
@@ -142,7 +142,7 @@ ApplicationWindow {
                 // cartes).
                 Layout.rightMargin: Kirigami.Units.largeSpacing + Kirigami.Units.smallSpacing
                 iconName: "view-refresh-symbolic"
-                enabled: !backend.pendingBusy
+                enabled: !backend.checking("all")
                 tooltip: "Tout vérifier (30 à 60 s) : configuration Nix, nouvelles versions en ligne, Flatpaks. Rien n'est modifié."
                     + (backend.pending.time ? "\nDernière recherche complète " + window.when(backend.pending.time) : "")
                 onClicked: backend.refreshPending()
@@ -197,25 +197,27 @@ ApplicationWindow {
             }
         }
     }
-    readonly property bool checking: backend.pendingBusy && !backend.pendingQuick
+    // Vérifications en cours (hors rapide) : Nix d'un côté, Flatpak de l'autre.
+    readonly property var nixChecks: backend.pendingParts.filter(p => p !== "quick" && p !== "flatpak")
+    readonly property bool checking: nixChecks.length > 0
     readonly property bool flatpakBusy: backend.flatpakRun.active === true
         || (window.running && (backend.run.parts || []).some(p => p.id === "flatpak" && p.state === "running"))
     footer: ColumnLayout {
         spacing: 0
         visible: tabs.currentIndex !== 1
         StatusStrip {
-            visible: window.running || backend.prebuildActive || (window.checking && backend.pendingPart !== "flatpak")
+            visible: window.running || backend.prebuildActive || window.checking
             showProgress: window.running || backend.prebuildActive
             progress: backend.progress
             text: window.running || backend.prebuildActive ? backend.summary
                 : ({ system: "Vérification de la configuration système…",
                      home: "Vérification de la configuration utilisateur…",
                      config: "Vérification de la configuration…",
-                     flake: "Recherche des mises à jour des entrées du flake…" }[backend.pendingPart]
+                     flake: "Recherche des mises à jour des entrées du flake…" }[window.nixChecks[0]]
                    || "Recherche de toutes les mises à jour…")
         }
         StatusStrip {
-            visible: window.flatpakBusy || (window.checking && backend.pendingPart === "flatpak")
+            visible: window.flatpakBusy || backend.pendingParts.includes("flatpak")
             showProgress: window.flatpakBusy
             text: window.flatpakBusy ? "Mise à jour des Flatpaks…" : "Recherche des mises à jour Flatpak…"
         }

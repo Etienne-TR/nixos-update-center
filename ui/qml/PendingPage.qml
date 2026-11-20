@@ -382,7 +382,7 @@ ScrollView {
                 },
                 IconAction {
                     iconName: "view-refresh-symbolic"
-                    enabled: !window.running && !backend.pendingBusy
+                    enabled: !window.running && !backend.checking("config")
                     tooltip: "Vérifier la configuration : évaluation du système et de Home Manager (environ 20 s), comparées aux générations installées. nixos-update-center-engine pending --only config"
                     onClicked: backend.refreshPart("config")
                 }
@@ -436,7 +436,7 @@ ScrollView {
             actions: [
                 IconAction {
                     iconName: "view-refresh-symbolic"
-                    enabled: !window.running && !backend.pendingBusy
+                    enabled: !window.running && !backend.checking("flake")
                     tooltip: "Rechercher les nouvelles versions en ligne (nix flake update à blanc, sans toucher flake.lock), quelques secondes. Les changements de flake.nix et flake.lock sont vus automatiquement."
                     onClicked: backend.refreshPart("flake")
                 }
@@ -500,7 +500,7 @@ ScrollView {
                 },
                 IconAction {
                     iconName: "view-refresh-symbolic"
-                    enabled: !fpCard.busy && !backend.pendingBusy
+                    enabled: !fpCard.busy && !backend.checking("flatpak")
                     tooltip: "Rechercher les mises à jour Flatpak seulement : flatpak remote-ls --updates --user. nixos-update-center-engine pending --only flatpak"
                     onClicked: backend.refreshPart("flatpak")
                 }

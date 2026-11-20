@@ -29,7 +29,7 @@ ColumnLayout {
     readonly property string fpLog: run.active && run.flatpakLog ? run.flatpakLog : (fp.log || "")
     readonly property var tasks: {
         const t = [];
-        if (backend.pendingBusy && !backend.pendingQuick)
+        if (window.checking)
             t.push({ id: "check", title: "Recherche des mises à jour", state: "running", detail: "en cours" });
         t.push({ id: "run", title: "Mise à jour",
                  state: run.active ? "running" : (run.state || ""),

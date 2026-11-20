@@ -33,6 +33,9 @@ class Backend : public QObject {
   Q_PROPERTY(bool pendingQuick READ pendingQuick NOTIFY pendingChanged)
   // Partie vérifiée en ce moment : all, system, home, flake, flatpak.
   Q_PROPERTY(QString pendingPart READ pendingPart NOTIFY pendingChanged)
+  // Vérifications en cours, en même temps : quick, all, system, home,
+  // config, flake, flatpak.
+  Q_PROPERTY(QStringList pendingParts READ pendingParts NOTIFY pendingChanged)
   Q_PROPERTY(int pendingCount READ pendingCount NOTIFY pendingChanged)
   Q_PROPERTY(QVariantList history READ history NOTIFY historyChanged)
   Q_PROPERTY(QVariantMap generations READ generations NOTIFY generationsChanged)
@@ -57,9 +60,22 @@ class Backend : public QObject {
   QVariantMap prebuild() const { return m_prebuild; }
   QVariantMap prebuildResult() const { return m_prebuildResult; }
   QVariantMap pending() const { return m_pending; }
-  bool pendingBusy() const { return m_pendingBusy; }
-  bool pendingQuick() const { return m_pendingQuick; }
-  QString pendingPart() const { return m_pendingPart; }
+  bool pendingBusy() const { return !m_pendingParts.isEmpty(); }
+  // Seulement des vérifications rapides en cours.
+  bool pendingQuick() const { return m_pendingParts == QStringList{"quick"}; }
+  // Première vérification en cours autre que la rapide.
+  QString pendingPart() const {
+    for (const QString &p : m_pendingParts)
+      if (p != "quick") return p;
+    return {};
+  }
+  QStringList pendingParts() const { return m_pendingParts; }
+  // Cette partie (system, home, config, flake, flatpak) est-elle en cours
+  // de vérification (seule ou dans une complète) ?
+  Q_INVOKABLE bool checking(const QString &part) const {
+    return m_pendingParts.contains(part) || m_pendingParts.contains("all") ||
+           (part == "config" && (m_pendingParts.contains("system") || m_pendingParts.contains("home")));
+  }
   int pendingCount() const;
   QVariantList history() const { return m_history; }
   QVariantMap generations() const { return m_generations; }
@@ -142,9 +158,7 @@ class Backend : public QObject {
   QString m_log, m_logPath, m_news, m_summary;
   qint64 m_logPos = 0;
   double m_progress = -1;
-  bool m_pendingBusy = false;
-  bool m_pendingQuick = false;
-  QString m_pendingPart;
-  QDateTime m_pendingMtime, m_historyMtime;
+  QStringList m_pendingParts;
+  QDateTime m_pendingMtime, m_flatpaksMtime, m_historyMtime;
   qint64 m_prebuildSince = 0;
 };

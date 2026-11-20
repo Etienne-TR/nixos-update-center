@@ -198,12 +198,17 @@ void Backend::readPrebuild() {
   }
 }
 
+// pending.json, plus flatpaks.json (recherche Flatpak à part) fusionné dedans.
 void Backend::readPending() {
-  const QString path = m_state + "/pending.json";
-  const QDateTime mtime = QFileInfo(path).lastModified();
-  if (mtime == m_pendingMtime) return;
+  const QString path = m_state + "/pending.json", fpPath = m_state + "/flatpaks.json";
+  const QDateTime mtime = QFileInfo(path).lastModified(), fpMtime = QFileInfo(fpPath).lastModified();
+  if (mtime == m_pendingMtime && fpMtime == m_flatpaksMtime) return;
   m_pendingMtime = mtime;
+  m_flatpaksMtime = fpMtime;
   m_pending = readJson(path);
+  const QVariantMap fp = readJson(fpPath);
+  m_pending.insert("flatpaks", fp.value("flatpaks").toList());
+  m_pending.insert("flatpakTime", fp.value("time"));
   emit pendingChanged();
 }
 
@@ -383,16 +388,20 @@ void Backend::rollbackHome(int generation) {
   startUpdate({"--rollback-home", QString::number(generation)});
 }
 
+// Plusieurs vérifications peuvent tourner en même temps (Flatpak à côté de
+// la config) ; la même deux fois, ou n'importe laquelle pendant une
+// complète, est ignorée.
 void Backend::runPending(const QStringList &args) {
-  if (m_pendingBusy) return;
-  m_pendingBusy = true;
-  m_pendingQuick = args.contains("--quick");
-  m_pendingPart = args.indexOf("--only") >= 0 ? args.value(args.indexOf("--only") + 1) : QStringLiteral("all");
+  const QString key = args.contains("--quick") ? QStringLiteral("quick")
+                      : args.indexOf("--only") >= 0 ? args.value(args.indexOf("--only") + 1)
+                                                     : QStringLiteral("all");
+  if (m_pendingParts.contains(key) || m_pendingParts.contains("all")) return;
+  m_pendingParts.append(key);
   emit pendingChanged();
   auto *p = new QProcess(this);
-  connect(p, &QProcess::finished, this, [this, p] {
+  connect(p, &QProcess::finished, this, [this, p, key] {
     p->deleteLater();
-    m_pendingBusy = false;
+    m_pendingParts.removeOne(key);
     m_pendingMtime = QDateTime();
     readPending();
     emit pendingChanged();

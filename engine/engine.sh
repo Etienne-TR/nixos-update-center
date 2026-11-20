@@ -910,6 +910,18 @@ changes() { # partie, dépôt, flake.lock relatif au dépôt, flake relatif, fla
 # Mises à jour Flatpak (installation user), en JSON : id, nom, branche,
 # version installée et disponible, taille à télécharger, dates des deux
 # compilations (secondes).
+# Mises à jour Flatpak disponibles, dans flatpaks.json (fichier et verrou à
+# part de pending.json : la recherche Flatpak ne dépend pas de Nix et peut
+# tourner en même temps qu'une vérification de la config).
+cmd_flatpak_pending() {
+  mkdir -p "$state"
+  exec 9>"$state/flatpaks.lock"
+  flock 9
+  local list="[]"
+  [ "$(cfg .flatpak)" != true ] || list=$(flatpak_updates)
+  jq -n --argjson f "$list" --argjson t "$(now)" '{flatpaks: $f, time: $t}' | write_json "$state/flatpaks.json"
+}
+
 flatpak_updates() {
   local id name branch version size origin ref installed idate rdate
   # Séparateur non blanc : un champ vide (runtime sans version) ne doit pas
@@ -951,6 +963,11 @@ cmd_pending() {
   # une seule partie (--only system|home|config|flake|flatpak ; config : les deux premières) ; le reste est
   # repris de la dernière vérification.
   local do_sys=1 do_home=1 do_flake=1 do_flatpak=1 do_claude=1
+  # Flatpaks seuls : sans le verrou de pending.json.
+  if [ "${1:-}" = --only ] && [ "${2:-}" = flatpak ]; then
+    cmd_flatpak_pending
+    return
+  fi
   case "${1:-}" in
     --quick) pending_quick=1 do_sys="" do_home="" do_flake="" do_flatpak="" do_claude="" ;;
     --only)
@@ -974,7 +991,7 @@ cmd_pending() {
   rm -f "$state/pending-errors.tmp"
   local sys_changed=null home_changed=null upstream="[]" upstream_ok=false
   local built_sys built_home
-  local flatpaks="[]" claude="null" unpushed="[]" out rc
+  local claude="null" unpushed="[]" out rc
   mkdir -p "$state"
   tmp=$(mktemp -d)
   repo=$(git -C "$flake" rev-parse --show-toplevel)
@@ -1068,7 +1085,6 @@ cmd_pending() {
       | [.upstream.inputs[]? | select(.from.rev == ($L.nodes[$L.nodes.root.inputs[.name] // ""].locked.rev // ""))]' \
       "$prev" 2>/dev/null || echo "[]")
     upstream_ok=$(jq -c '.upstream.checked // false' "$prev" 2>/dev/null || echo false)
-    flatpaks=$(jq -c '.flatpaks // []' "$prev" 2>/dev/null || echo "[]")
     claude=$(jq -c '.claudeDesktop // null' "$prev" 2>/dev/null || echo null)
   fi
 
@@ -1080,14 +1096,17 @@ cmd_pending() {
 
   # Flatpaks : aussi toutes les 5 minutes avec la vérification rapide
   # (quelques secondes).
-  local flatpak_time
-  flatpak_time=$(jq '.flatpakTime // 0' "$prev" 2>/dev/null || echo 0)
+  # En arrière-plan, dans flatpaks.json (voir cmd_flatpak_pending).
+  local flatpak_time flatpak_pid=""
+  flatpak_time=$(jq '.time // 0' "$state/flatpaks.json" 2>/dev/null || echo 0)
   if [ -n "$pending_quick" ] && [ -z "$do_flatpak" ] && [ $(($(now) - flatpak_time)) -ge 300 ]; then
     do_flatpak=1
   fi
-  if [ -n "$do_flatpak" ] && [ "$(cfg .flatpak)" = true ]; then
-    flatpaks=$(flatpak_updates)
-    flatpak_time=$(now)
+  if [ -n "$do_flatpak" ]; then
+    # Sans le verrou de pending.json (fd 8) ni la sortie : la suite n'attend
+    # pas la recherche Flatpak.
+    (exec 8>&-; cmd_flatpak_pending) >/dev/null 2>&1 &
+    flatpak_pid=$!
   fi
 
   if [ -n "$do_claude" ] && [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
@@ -1118,7 +1137,6 @@ cmd_pending() {
     --arg tsys "$target_sys" --arg thome "$target_home" --arg head "$head" --arg dirty "$dirty_hash" \
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
-    --argjson flatpaks "$flatpaks" --argjson flatpakTime "$flatpak_time" \
     --argjson claude "$claude" --argjson unpushed "$unpushed" --argjson uncommitted "$uncommitted" \
     --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
     { time: $time, quickTime: $quickTime, quick: $quick, head: $head, dirtyHash: $dirty,
@@ -1127,7 +1145,7 @@ cmd_pending() {
         home: ({changed: $homec, built: ($homeb != ""), target: $thome, packages: $pkghome} + $homech),
         flake: ($flakech | {commits, dirty}) },
       upstream: {checked: $upok, inputs: $upstream},
-      flatpaks: $flatpaks, flatpakTime: $flatpakTime, claudeDesktop: $claude, unpushed: $unpushed,
+      claudeDesktop: $claude, unpushed: $unpushed,
       uncommitted: $uncommitted, errors: $errors }' |
     tee "$state/pending.json.tmp"
   mv -f "$state/pending.json.tmp" "$state/pending.json"
