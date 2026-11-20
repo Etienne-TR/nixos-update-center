@@ -304,13 +304,11 @@ ScrollView {
                     color: installHover.hovered && installLine.clickable ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
                     text: confCard.packages.length > 0
                         ? "Installation de " + confCard.packages.length + (confCard.packages.length > 1 ? " paquets" : " paquet")
-                        : "Installation de la nouvelle configuration"
-                }
-                Item { Layout.fillWidth: true; Layout.preferredWidth: 0 }
-                Label {
-                    opacity: 0.6
-                    text: [confCard.sys.changed === true ? "système" : "", confCard.home.changed === true ? "utilisateur" : ""]
-                        .filter(x => x).join(" et ")
+                        // Génération déjà construite (préparation) : il ne
+                        // reste qu'à l'activer ; sinon Appliquer la construit.
+                        : [confCard.sys, confCard.home].every(p => p.changed !== true || p.built)
+                            ? "Activation de la nouvelle génération"
+                            : "Construction et activation de la nouvelle génération"
                 }
             }
             // Rien à reconstruire : seulement flake.lock ou des commits.
