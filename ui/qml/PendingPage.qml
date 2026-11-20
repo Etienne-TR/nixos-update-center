@@ -213,14 +213,10 @@ ScrollView {
                       : Kirigami.Theme.negativeTextColor
 
             Label {
-                visible: confCard.allInstalled
+                visible: confCard.allInstalled && confCard.lockInputs.length === 0
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                // Entrées adoptées sans effet sur ce qui est installé : seul
-                // flake.lock est à enregistrer (Appliquer le committe).
-                text: confCard.lockInputs.length > 0
-                    ? "Les entrées adoptées ne changent rien à ce qui est installé : Appliquer enregistre seulement flake.lock (commit et push)."
-                    : "Rien à appliquer."
+                text: "Rien à appliquer."
             }
             // Évaluation en échec : la dernière erreur de Nix, une fois même
             // si système et Home Manager donnent la même.
@@ -249,7 +245,7 @@ ScrollView {
 
             Heading {
                 visible: confCard.files.length > 0
-                Layout.topMargin: confCard.allInstalled ? Kirigami.Units.largeSpacing : 0
+                Layout.topMargin: (confCard.allInstalled && confCard.lockInputs.length === 0) ? Kirigami.Units.largeSpacing : 0
                 text: confCard.files.length > 1 ? "Fichiers modifiés" : "Fichier modifié"
             }
             Repeater {
@@ -259,7 +255,7 @@ ScrollView {
             Heading {
                 visible: confCard.unpushed.length > 0
                 // Pas d'espace au-dessus du premier titre de la carte.
-                Layout.topMargin: confCard.files.length > 0 || confCard.allInstalled ? Kirigami.Units.largeSpacing : 0
+                Layout.topMargin: confCard.files.length > 0 || (confCard.allInstalled && confCard.lockInputs.length === 0) ? Kirigami.Units.largeSpacing : 0
                 text: confCard.unpushed.length > 1 ? "Commits non publiés" : "Commit non publié"
             }
             Repeater {
@@ -270,7 +266,7 @@ ScrollView {
             // À installer.
             Heading {
                 visible: confCard.lockInputs.length > 0
-                Layout.topMargin: confCard.files.length + confCard.unpushed.length > 0 || confCard.allInstalled ? Kirigami.Units.largeSpacing : 0
+                Layout.topMargin: confCard.files.length + confCard.unpushed.length > 0 || (confCard.allInstalled && confCard.lockInputs.length === 0) ? Kirigami.Units.largeSpacing : 0
                 text: confCard.lockInputs.length > 1 ? "Entrées du flake adoptées" : "Entrée du flake adoptée"
             }
             Repeater {
@@ -283,8 +279,17 @@ ScrollView {
                 }
             }
             Heading {
-                visible: confCard.packages.length > 0
-                text: confCard.packages.length > 1 ? "Paquets qui changent" : "Paquet qui change"
+                // Entrées adoptées sans effet sur ce qui est installé : la
+                // partie dit qu'aucun paquet ne change.
+                readonly property bool noEffect: confCard.allInstalled && confCard.lockInputs.length > 0
+                visible: confCard.packages.length > 0 || noEffect
+                text: confCard.packages.length === 1 ? "Paquet prêt à installer" : "Paquets prêts à installer"
+            }
+            Label {
+                visible: confCard.allInstalled && confCard.lockInputs.length > 0
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "Aucun : les entrées adoptées ne changent rien à ce qui est installé. Appliquer enregistre seulement flake.lock (commit et push)."
             }
             Repeater {
                 model: confCard.packages.slice(0, 8)
