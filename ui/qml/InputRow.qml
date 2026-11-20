@@ -38,7 +38,10 @@ RowLayout {
         }
         MenuItem {
             // Comparaison entre les deux révisions (GitHub pour l'instant).
-            text: "Voir les changements ↗"  // ↗ : ouvre le navigateur
+            // Globe symbolique : ouvre le navigateur (web-browser-symbolic
+            // existe dans Pop/Adwaita, pas internet-web-browser-symbolic).
+            text: "Voir les changements"
+            icon.name: "web-browser-symbolic"
             enabled: row.url.length > 0
             onTriggered: Qt.openUrlExternally(row.url)
         }
