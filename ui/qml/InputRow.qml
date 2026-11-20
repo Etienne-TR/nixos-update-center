@@ -72,9 +72,8 @@ RowLayout {
     IconAction {
         id: arrow
         iconName: row.updatable ? "pan-down-symbolic" : "help-about-symbolic"
-        // Toujours visible (ligne cliquable), en couleur d'accent avec la
-        // ligne survolée.
-        opacity: row.clickable ? 1 : 0
+        // Au survol de la ligne seulement (place gardée), en couleur d'accent.
+        opacity: row.clickable && hover.hovered ? 1 : 0
         enabled: row.clickable
         highlighted: hover.hovered
         tooltip: row.updatable ? "Adopter, ou voir les changements sur GitHub" : "Voir les changements sur GitHub"

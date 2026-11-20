@@ -300,6 +300,8 @@ ScrollView {
                 }
                 IconAction {
                     visible: installLine.clickable
+                    // Au survol de la ligne seulement, comme pour les entrées.
+                    opacity: installHover.hovered ? 1 : 0
                     highlighted: installHover.hovered
                     iconName: "help-about-symbolic"
                     tooltip: "Voir les paquets"
