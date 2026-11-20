@@ -298,14 +298,29 @@ ScrollView {
                       : allInstalled ? Kirigami.Theme.positiveTextColor
                       : Kirigami.Theme.negativeTextColor
 
-            // Évaluation en échec : la dernière erreur de Nix.
-            Label {
-                visible: (confCard.sys.changed === null || confCard.home.changed === null) && (page.pending.errors || []).length > 0
+            // Évaluation en échec : la dernière erreur de Nix, une fois même
+            // si système et Home Manager donnent la même.
+            ColumnLayout {
+                readonly property var errors: (page.pending.errors || []).map(e => e.trim().replace(/^error: /, ""))
+                                                .filter((e, i, a) => e.length > 0 && a.indexOf(e) === i)
+                visible: (confCard.sys.changed === null || confCard.home.changed === null) && errors.length > 0
                 Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                color: Kirigami.Theme.negativeTextColor
-                font.family: Kirigami.Theme.fixedWidthFont.family
-                text: (page.pending.errors || []).join("\n")
+                spacing: 0
+                Label {
+                    text: "Évaluation impossible"
+                    font.bold: true
+                    color: Kirigami.Theme.negativeTextColor
+                }
+                Repeater {
+                    model: parent.errors
+                    Label {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        text: modelData
+                        wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                        opacity: 0.8
+                    }
+                }
             }
 
             Heading {

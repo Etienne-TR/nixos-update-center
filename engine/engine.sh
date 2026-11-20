@@ -264,7 +264,7 @@ differs() { # installable, génération active, fichier où écrire le chemin é
   err=$(mktemp)
   if ! out=$(nix eval --raw "$1.outPath" 2>"$err"); then
     # Dernière ligne d'erreur de Nix, gardée pour l'interface.
-    grep -v '^\s*$' "$err" | tail -n 1 >>"$state/pending-errors.tmp" || true
+    grep -v '^\s*$' "$err" | tail -n 1 | sed -E 's/^[[:space:]]*(error: )?//' >>"$state/pending-errors.tmp" || true
     rm -f "$err"
     echo null
     return
@@ -693,9 +693,11 @@ cmd_prebuild() {
   }
   trap 'finish stopped; exit 0' TERM
 
+  # Sans NIX_REMOTE=local (celui du service root) : l'utilisateur passe par
+  # nix-daemon, sinon « opening lock file …/big-lock: Permission denied ».
   as_user() {
     setpriv --reuid="$user" --regid="$(id -g "$user")" --init-groups -- \
-      env HOME="$home" XDG_RUNTIME_DIR="/run/user/$(id -u "$user")" "$@"
+      env -u NIX_REMOTE HOME="$home" XDG_RUNTIME_DIR="/run/user/$(id -u "$user")" "$@"
   }
 
   if [ "$(cfg .routine.flatpak)" = true ]; then
@@ -721,7 +723,7 @@ cmd_prebuild() {
   # récupérer une entrée privée du flake (pas de clé SSH). Les .drv obtenus
   # sont ensuite construits ici, sur le store local, en priorité minimale.
   local drvs sys_drv home_drv
-  if drvs=$(as_user env -u NIX_REMOTE nix path-info --derivation \
+  if drvs=$(as_user nix path-info --derivation \
     "$flake#nixosConfigurations.$host.config.system.build.toplevel" \
     "$flake#homeConfigurations.$hmconf.activationPackage"); then
     sys_drv=$(grep -- '-nixos-system-' <<<"$drvs" | head -n 1 || true)
