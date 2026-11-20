@@ -288,8 +288,8 @@ ScrollView {
                 visible: confCard.anyChanged
                 mono: false
                 text: confCard.packages.length > 0
-                    ? "Installer " + confCard.packages.length + (confCard.packages.length > 1 ? " paquets" : " paquet")
-                    : "Installer la nouvelle configuration"
+                    ? "Installation de " + confCard.packages.length + (confCard.packages.length > 1 ? " paquets" : " paquet")
+                    : "Installation de la nouvelle configuration"
                 scope: [confCard.sys.changed === true ? "système" : "", confCard.home.changed === true ? "utilisateur" : ""]
                     .filter(x => x).join(" et ")
                 IconAction {
@@ -309,12 +309,12 @@ ScrollView {
             ListLine {
                 visible: confCard.lockInputs.length > 0
                 mono: false
-                text: "Committer et publier flake.lock"
+                text: "Commit et publication de flake.lock"
             }
             ListLine {
                 visible: confCard.unpushed.length > 0
                 mono: false
-                text: "Publier " + (confCard.unpushed.length > 1 ? "les " + confCard.unpushed.length + " commits non publiés" : "le commit non publié")
+                text: "Publication " + (confCard.unpushed.length > 1 ? "des " + confCard.unpushed.length + " commits non publiés" : "du commit non publié")
             }
             Dialog {
                 id: packagesDialog
