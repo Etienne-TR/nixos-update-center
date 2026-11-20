@@ -274,7 +274,8 @@ ScrollView {
                 const what = st === "??" || st.includes("A") ? "nouveau, non committé"
                            : st.includes("D") ? "supprimé, non committé" : "non committé";
                 return { text: path, scope: what + (allInstalled ? ", appliqué" : "") };
-            }).concat(unpushed.map(c => ({ text: c.hash + "  " + c.subject, scope: "non publié" })))
+            }).concat(unpushed.filter(c => !commits.some(k => k.hash === c.hash))
+                       .map(c => ({ text: c.hash + "  " + c.subject, scope: "non publié" })))
             // Commits à installer : réunis par hash, avec leur portée.
             readonly property var commits: {
                 const out = [], idx = {};
@@ -285,8 +286,12 @@ ScrollView {
                     }
                 };
                 add(sys.commits, "sys"); add(home.commits, "home"); add(fl.commits, "flake");
+                // Un commit pas encore sur GitHub n'est listé qu'ici, avec
+                // « non publié ».
+                const unpub = h => unpushed.some(u => u.hash === h);
                 return out.map(c => ({ hash: c.hash, subject: c.subject,
-                    scope: [c.flake ? "flake.nix" : "", confCard.scope(c.sys, c.home)].filter(x => x).join(", ") }));
+                    scope: [c.flake ? "flake.nix" : "", confCard.scope(c.sys, c.home),
+                            unpub(c.hash) ? "non publié" : ""].filter(x => x).join(", ") }));
             }
             readonly property var lockInputs: {
                 const seen = {}, out = [];
@@ -329,7 +334,7 @@ ScrollView {
             // À installer.
             Heading {
                 visible: confCard.commits.length > 0
-                text: confCard.commits.length > 1 ? "Commits à installer" : "Commit à installer"
+                text: confCard.commits.length > 1 ? "Commits" : "Commit"
             }
             Repeater {
                 model: confCard.commits
