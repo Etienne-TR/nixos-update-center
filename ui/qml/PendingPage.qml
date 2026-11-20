@@ -323,9 +323,6 @@ ScrollView {
                 visible: confCard.files.length > 0
                 Layout.topMargin: 0
                 text: confCard.files.length > 1 ? "Fichiers modifiés" : "Fichier modifié"
-                HoverHandler { id: filesHover }
-                ToolTip.visible: filesHover.hovered
-                ToolTip.text: "Pas encore committés. Le centre ne committe que flake.lock, après une application réussie."
             }
             Repeater {
                 model: confCard.files
@@ -334,9 +331,6 @@ ScrollView {
             Heading {
                 visible: confCard.unpushed.length > 0
                 text: confCard.unpushed.length > 1 ? "Commits non publiés" : "Commit non publié"
-                HoverHandler { id: unpushedHover }
-                ToolTip.visible: unpushedHover.hovered
-                ToolTip.text: "Pas encore sur GitHub : publiés par git push après une application réussie."
             }
             Repeater {
                 model: confCard.unpushed
