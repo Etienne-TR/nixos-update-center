@@ -337,7 +337,7 @@ ScrollView {
             }
             Heading {
                 visible: confCard.lockInputs.length > 0
-                text: confCard.lockInputs.length > 1 ? "Entrées du flake adoptées, à installer" : "Entrée du flake adoptée, à installer"
+                text: confCard.lockInputs.length > 1 ? "Entrées du flake adoptées" : "Entrée du flake adoptée"
             }
             Repeater {
                 model: confCard.lockInputs
