@@ -49,11 +49,11 @@ ScrollView {
         const m = /^chore\(flake\): mise à jour (?:de |du )(.*)$/.exec(subject || "");
         return m ? "flake.lock : " + m[1].replace(/^flake\.lock$/, "toutes les entrées") : subject;
     }
-    // Fin de la dernière mise à jour Nix réussie (au moins une partie), ou 0.
+    // Installation de la configuration actuelle : la plus récente des
+    // générations courantes (système, Home Manager), ou 0.
     function lastInstalled() {
-        const run = backend.run;
-        return !run.active && (run.parts || []).some(p => (p.id === "system" || p.id === "home") && p.state === "success")
-            ? run.finished : 0;
+        const g = backend.generations, cur = l => ((l || []).find(x => x.current) || {}).time || 0;
+        return Math.max(cur(g.system), cur(g.home));
     }
     function compareUrl(input) {
         if (input.to.type !== "github" || !input.from || !input.from.rev || !input.to.rev) return "";
@@ -132,36 +132,26 @@ ScrollView {
             // En cours : seulement les actions ; l'avancement est dans le
             // bandeau du bas.
             bodyVisible: !backend.prebuildActive
-            subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale")
-                    : page.result.time ? "préparée " + window.when(page.result.time) : ""
+            subtitle: page.result.time ? "préparée " + window.when(page.result.time) : ""
             actions: [
-            Button {
-                visible: backend.prebuildActive
-                icon.name: "media-seek-forward"
-                text: "Pleine vitesse"
-                enabled: !page.pre.boosted
+            // En cours : icônes discrètes (l'avancement est dans le bandeau).
+            IconAction {
+                visible: backend.prebuildActive && !page.pre.boosted
+                iconName: "media-seek-forward"
+                tooltip: "Passer à pleine vitesse (la préparation tourne en priorité minimale). nixos-update-center-engine boost"
                 onClicked: backend.boostPrebuild()
-                ToolTip.visible: hovered
-                ToolTip.delay: 500
-                ToolTip.text: "nixos-update-center-engine boost : la préparation en cours repasse en priorité normale (sudo nixos-update-center-root boost : chrt, renice, ionice, CPUWeight/IOWeight)."
             },
-            Button {
+            IconAction {
                 visible: backend.prebuildActive
-                icon.name: "process-stop"
-                text: "Arrêter"
-                onClicked: backend.stopPrebuild()
-                ToolTip.visible: hovered
-                ToolTip.delay: 500
-                ToolTip.text: "nixos-update-center-engine stop-prebuild : systemctl stop nixos-update-center-prebuild, sans reprise au prochain démarrage. Ce qui est déjà construit est gardé."
-            },
-            Button {
-                visible: backend.prebuildActive
-                icon.name: "utilities-terminal"
-                text: "Journal"
+                iconName: "utilities-terminal-symbolic"
+                tooltip: "Journal de la préparation (journalctl -f -u nixos-update-center-prebuild, dans un terminal)"
                 onClicked: backend.openPrebuildJournal()
-                ToolTip.visible: hovered
-                ToolTip.delay: 500
-                ToolTip.text: "journalctl -f -u nixos-update-center-prebuild, dans un terminal."
+            },
+            IconAction {
+                visible: backend.prebuildActive
+                iconName: "process-stop-symbolic"
+                tooltip: "Arrêter la préparation (ce qui est déjà construit est gardé). nixos-update-center-engine stop-prebuild"
+                onClicked: backend.stopPrebuild()
             },
             Button {
                 visible: !backend.prebuildActive && !window.running && (prepCard.prep === "stale" || prepCard.prep === "unknown")
@@ -243,7 +233,11 @@ ScrollView {
                 visible: confCard.allInstalled
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: "Rien à appliquer."
+                // Entrées adoptées sans effet sur ce qui est installé : seul
+                // flake.lock est à enregistrer (Appliquer le committe).
+                text: confCard.lockInputs.length > 0
+                    ? "Les entrées adoptées ne changent rien à ce qui est installé : Appliquer enregistre seulement flake.lock (commit et push)."
+                    : "Rien à appliquer."
             }
             // Évaluation en échec : la dernière erreur de Nix, une fois même
             // si système et Home Manager donnent la même.
@@ -272,7 +266,7 @@ ScrollView {
 
             Heading {
                 visible: confCard.files.length > 0
-                Layout.topMargin: 0
+                Layout.topMargin: confCard.allInstalled ? Kirigami.Units.largeSpacing : 0
                 text: confCard.files.length > 1 ? "Fichiers modifiés" : "Fichier modifié"
             }
             Repeater {
@@ -282,7 +276,7 @@ ScrollView {
             Heading {
                 visible: confCard.unpushed.length > 0
                 // Pas d'espace au-dessus du premier titre de la carte.
-                Layout.topMargin: confCard.files.length > 0 ? Kirigami.Units.largeSpacing : 0
+                Layout.topMargin: confCard.files.length > 0 || confCard.allInstalled ? Kirigami.Units.largeSpacing : 0
                 text: confCard.unpushed.length > 1 ? "Commits non publiés" : "Commit non publié"
             }
             Repeater {
@@ -293,7 +287,7 @@ ScrollView {
             // À installer.
             Heading {
                 visible: confCard.lockInputs.length > 0
-                Layout.topMargin: confCard.files.length + confCard.unpushed.length > 0 ? Kirigami.Units.largeSpacing : 0
+                Layout.topMargin: confCard.files.length + confCard.unpushed.length > 0 || confCard.allInstalled ? Kirigami.Units.largeSpacing : 0
                 text: confCard.lockInputs.length > 1 ? "Entrées du flake adoptées" : "Entrée du flake adoptée"
             }
             Repeater {
@@ -344,7 +338,7 @@ ScrollView {
                 // sautée). Bouton divisé : la flèche collée à droite, quand les
                 // deux sont à appliquer, propose une seule partie.
                 RowLayout {
-                    visible: !confCard.allInstalled && !window.running
+                    visible: (!confCard.allInstalled || confCard.lockInputs.length > 0) && !window.running
                     spacing: 0
                     Button {
                         icon.name: "media-playback-start-symbolic"
