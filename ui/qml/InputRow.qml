@@ -19,7 +19,6 @@ RowLayout {
 
     Label {
         text: row.input.name
-        font.bold: true
     }
     Label {
         id: detail

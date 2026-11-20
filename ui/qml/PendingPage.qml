@@ -525,7 +525,7 @@ ScrollView {
                 RowLayout {
                     required property var modelData
                     Layout.fillWidth: true
-                    Label { text: modelData.name; font.bold: true }
+                    Label { text: modelData.name }
                     Label {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
