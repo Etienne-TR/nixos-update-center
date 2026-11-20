@@ -204,8 +204,11 @@ ScrollView {
             // Rien à montrer (tout installé, dépôt propre) : titre seul.
             bodyVisible: files.length + unpushed.length + lockInputs.length + packages.length > 0
                 || sys.changed === null || home.changed === null || allInstalled
-            badge: anyChanged ? "●" : allInstalled ? "✓" : "?"
-            badgeColor: anyChanged ? Kirigami.Theme.neutralTextColor
+            // À appliquer aussi quand seul flake.lock est à enregistrer
+            // (entrées adoptées sans effet sur ce qui est installé).
+            readonly property bool needsApply: anyChanged || lockInputs.length > 0
+            badge: needsApply ? "●" : allInstalled ? "✓" : "?"
+            badgeColor: needsApply ? Kirigami.Theme.neutralTextColor
                       : allInstalled ? Kirigami.Theme.positiveTextColor
                       : Kirigami.Theme.negativeTextColor
 
