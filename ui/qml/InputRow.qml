@@ -27,37 +27,44 @@ RowLayout {
         enabled: row.clickable
         onTapped: (point) => menu.popup(row, point.position.x, row.height)
     }
+    // Entrée de menu au rendu commun (même alignement pour toutes), avec une
+    // icône facultative en fin de ligne.
+    component RowMenuItem: MenuItem {
+        id: item
+        property string endIcon
+        contentItem: RowLayout {
+            spacing: Kirigami.Units.largeSpacing
+            Label {
+                Layout.fillWidth: true
+                Layout.leftMargin: Kirigami.Units.smallSpacing
+                text: item.text
+                color: item.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                opacity: item.enabled ? 1 : 0.5
+            }
+            Kirigami.Icon {
+                visible: item.endIcon.length > 0
+                source: item.endIcon
+                implicitWidth: Kirigami.Units.iconSizes.small
+                implicitHeight: implicitWidth
+                isMask: true
+                color: item.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+            }
+        }
+    }
     Menu {
         id: menu
-        MenuItem {
+        RowMenuItem {
             visible: row.updatable
             height: visible ? implicitHeight : 0
             text: "Adopter"
             enabled: !window.running
             onTriggered: backend.updateInput(row.input.name)
         }
-        MenuItem {
-            // Comparaison entre les deux révisions (GitHub pour l'instant).
-            // Globe en fin de ligne (ouvre le navigateur) : pas de marge
-            // d'icône devant les autres actions du menu.
-            id: changesItem
+        // Comparaison entre les deux révisions (GitHub pour l'instant) ;
+        // maillon : lien vers le navigateur.
+        RowMenuItem {
             text: "Voir les changements"
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.largeSpacing
-                Label {
-                    Layout.fillWidth: true
-                    text: changesItem.text
-                    color: changesItem.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
-                    opacity: changesItem.enabled ? 1 : 0.5
-                }
-                Kirigami.Icon {
-                    source: "web-browser-symbolic"
-                    implicitWidth: Kirigami.Units.iconSizes.small
-                    implicitHeight: implicitWidth
-                    isMask: true
-                    color: changesItem.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
-                }
-            }
+            endIcon: "insert-link-symbolic"
             enabled: row.url.length > 0
             onTriggered: Qt.openUrlExternally(row.url)
         }
