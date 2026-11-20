@@ -111,7 +111,12 @@ ScrollView {
             }
             // En cours : seulement les actions ; l'avancement est dans le
             // bandeau du bas.
-            bodyVisible: !backend.prebuildActive
+            // Phrase seulement quand il y a quelque chose à dire (à préparer,
+            // état inconnu) ; sinon la pastille ✓ suffit.
+            bodyVisible: !backend.prebuildActive && (prep === "stale" || prep === "unknown")
+            badge: backend.prebuildActive ? "" : prep === "stale" ? "●" : prep === "unknown" ? "?" : "✓"
+            badgeColor: prep === "stale" ? Kirigami.Theme.neutralTextColor
+                      : prep === "unknown" ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.positiveTextColor
             subtitle: page.result.time ? "préparée " + window.when(page.result.time) : ""
             actions: [
             // En cours : icônes discrètes (l'avancement est dans le bandeau).
@@ -203,7 +208,7 @@ ScrollView {
             subtitle: page.lastInstalled() ? "installée " + window.when(page.lastInstalled()) : ""
             // Rien à montrer (tout installé, dépôt propre) : titre seul.
             bodyVisible: files.length + unpushed.length + lockInputs.length + packages.length > 0
-                || sys.changed === null || home.changed === null || allInstalled
+                || sys.changed === null || home.changed === null
             // À appliquer aussi quand seul flake.lock est à enregistrer
             // (entrées adoptées sans effet sur ce qui est installé).
             readonly property bool needsApply: anyChanged || lockInputs.length > 0
@@ -212,12 +217,6 @@ ScrollView {
                       : allInstalled ? Kirigami.Theme.positiveTextColor
                       : Kirigami.Theme.negativeTextColor
 
-            Label {
-                visible: confCard.allInstalled && confCard.lockInputs.length === 0
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: "Rien à appliquer."
-            }
             // Évaluation en échec : la dernière erreur de Nix, une fois même
             // si système et Home Manager donnent la même.
             ColumnLayout {
@@ -245,7 +244,7 @@ ScrollView {
 
             Heading {
                 visible: confCard.files.length > 0
-                Layout.topMargin: (confCard.allInstalled && confCard.lockInputs.length === 0) ? Kirigami.Units.largeSpacing : 0
+                Layout.topMargin: 0
                 text: confCard.files.length > 1 ? "Fichiers modifiés" : "Fichier modifié"
             }
             Repeater {
@@ -255,7 +254,7 @@ ScrollView {
             Heading {
                 visible: confCard.unpushed.length > 0
                 // Pas d'espace au-dessus du premier titre de la carte.
-                Layout.topMargin: confCard.files.length > 0 || (confCard.allInstalled && confCard.lockInputs.length === 0) ? Kirigami.Units.largeSpacing : 0
+                Layout.topMargin: confCard.files.length > 0 ? Kirigami.Units.largeSpacing : 0
                 text: confCard.unpushed.length > 1 ? "Commits non publiés" : "Commit non publié"
             }
             Repeater {
@@ -266,7 +265,7 @@ ScrollView {
             // À installer.
             Heading {
                 visible: confCard.lockInputs.length > 0
-                Layout.topMargin: confCard.files.length + confCard.unpushed.length > 0 || (confCard.allInstalled && confCard.lockInputs.length === 0) ? Kirigami.Units.largeSpacing : 0
+                Layout.topMargin: confCard.files.length + confCard.unpushed.length > 0 ? Kirigami.Units.largeSpacing : 0
                 text: confCard.lockInputs.length > 1 ? "Entrées du flake adoptées" : "Entrée du flake adoptée"
             }
             Repeater {
