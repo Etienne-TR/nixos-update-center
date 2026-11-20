@@ -109,6 +109,9 @@ ScrollView {
 
         Card {
             title: "Préparation en arrière-plan"
+            // En cours : seulement les actions ; l'avancement est dans le
+            // bandeau du bas.
+            bodyVisible: !backend.prebuildActive
             subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale") : ""
             actions: [
             Button {
@@ -150,43 +153,6 @@ ScrollView {
                 ToolTip.text: "nixos-update-center-engine start-prebuild : systemctl start nixos-update-center-prebuild, qui construit système et Home Manager sans les activer (nix build en priorité minimale) et télécharge les Flatpaks (flatpak update --no-deploy)."
             }
             ]
-
-            // En cours.
-            ColumnLayout {
-                visible: backend.prebuildActive
-                Layout.fillWidth: true
-                ProgressBar {
-                    Layout.fillWidth: true
-                    from: 0; to: 1
-                    indeterminate: !(page.pre.fraction >= 0)
-                    value: page.pre.fraction >= 0 ? page.pre.fraction : 0
-                }
-                Label {
-                    visible: page.pre.phase === "eval"
-                    text: "Évaluation de la configuration…"
-                }
-                Label {
-                    visible: page.pre.phase !== "eval"
-                    text: "Constructions : " + (page.pre.builds ? page.pre.builds.done + "/" + page.pre.builds.expected : "–")
-                          + (page.pre.builds && page.pre.builds.failed > 0 ? ", " + page.pre.builds.failed + " en échec" : "")
-                          + "    Téléchargements : " + (page.pre.downloads ? page.pre.downloads.done + "/" + page.pre.downloads.expected : "–")
-                }
-                Repeater {
-                    model: (page.pre.building || []).slice(0, 3)
-                    Label {
-                        required property var modelData
-                        text: "En cours : " + modelData.name + (modelData.phase ? " (" + modelData.phase + ")" : "")
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                }
-                Label {
-                    visible: !!page.pre.flatpak
-                    text: page.pre.flatpak === "running" ? "Flatpak : téléchargement en cours"
-                          : page.pre.flatpak === "done" ? "Flatpak : mises à jour téléchargées"
-                          : "Flatpak : téléchargement en échec"
-                }
-            }
 
             // À l'arrêt.
             RowLayout {
