@@ -1038,6 +1038,10 @@ cmd_pending() {
 
   unpushed=$(git -C "$repo" log --format='%h%x09%s' '@{u}..' 2>/dev/null |
     jq -R 'split("\t") | {hash: .[0], subject: .[1]}' | jq -s .)
+  # Fichiers non committés du flake (flake.nix et flake.lock compris).
+  local uncommitted
+  uncommitted=$(git -C "$repo" status --porcelain -- "$dir" 2>/dev/null |
+    jq -R -s --arg dir "$dir/" 'split("\n") | map(select(length > 0) | "\(.[0:2]) \(.[3:] | ltrimstr($dir))")')
 
   local full_time
   full_time=$(now)
@@ -1051,7 +1055,7 @@ cmd_pending() {
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
     --argjson flatpaks "$flatpaks" --argjson flatpakTime "$flatpak_time" \
-    --argjson claude "$claude" --argjson unpushed "$unpushed" \
+    --argjson claude "$claude" --argjson unpushed "$unpushed" --argjson uncommitted "$uncommitted" \
     --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
     { time: $time, quickTime: $quickTime, quick: $quick, head: $head, dirtyHash: $dirty,
       apply: {
@@ -1060,7 +1064,7 @@ cmd_pending() {
         flake: ($flakech | {commits, dirty}) },
       upstream: {checked: $upok, inputs: $upstream},
       flatpaks: $flatpaks, flatpakTime: $flatpakTime, claudeDesktop: $claude, unpushed: $unpushed,
-      errors: $errors }' |
+      uncommitted: $uncommitted, errors: $errors }' |
     tee "$state/pending.json.tmp"
   mv -f "$state/pending.json.tmp" "$state/pending.json"
   rm -rf "$tmp"

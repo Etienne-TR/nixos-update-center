@@ -45,6 +45,25 @@ ScrollView {
             + input.from.rev + "..." + input.to.rev;
     }
 
+    // Titre de liste et ligne d'élément de la carte Configuration.
+    component Heading: Label {
+        Layout.topMargin: Kirigami.Units.smallSpacing
+        font.bold: true
+    }
+    component ListLine: RowLayout {
+        property string text
+        property string scope
+        property bool mono: true
+        Layout.fillWidth: true
+        Label {
+            Layout.fillWidth: true
+            text: parent.text
+            elide: Text.ElideRight
+            font.family: parent.mono ? Kirigami.Theme.fixedWidthFont.family : Kirigami.Theme.defaultFont.family
+        }
+        Label { visible: parent.scope.length > 0; text: parent.scope; opacity: 0.6 }
+    }
+
     ColumnLayout {
         width: page.availableWidth
         spacing: Kirigami.Units.largeSpacing
@@ -125,21 +144,6 @@ ScrollView {
                     onClicked: window.showRunTab()
                 }
             }
-        }
-
-        // Commits locaux pas encore sur GitHub : une ligne discrète (envoyés
-        // après une application réussie), le détail au survol.
-        Label {
-            readonly property var list: page.pending.unpushed || []
-            visible: list.length > 0
-            Layout.fillWidth: true
-            opacity: 0.7
-            elide: Text.ElideRight
-            text: list.length + " commit" + (list.length > 1 ? "s" : "") + " pas encore envoyé" + (list.length > 1 ? "s" : "")
-                  + " sur GitHub (envoyé" + (list.length > 1 ? "s" : "") + " après une application réussie)"
-            HoverHandler { id: unpushedHover }
-            ToolTip.visible: unpushedHover.hovered
-            ToolTip.text: list.map(c => c.hash + "  " + c.subject).join("\n")
         }
 
         Card {
@@ -242,148 +246,208 @@ ScrollView {
             }
         }
 
-        // ── Bloc 1 : config à appliquer (bouton « Appliquer ») ──
-        Repeater {
-            model: [ { key: "system", label: "Configuration système (NixOS)" },
-                     { key: "home", label: "Configuration utilisateur (Home Manager)" } ]
-            Card {
-                id: partCard
-                required property var modelData
-                readonly property var st: page.apply[modelData.key] || {}
-                Layout.fillWidth: true
-                title: modelData.label
-                // État : pastille après le titre (● à appliquer, ✓ à jour).
-                badge: st.changed === true ? "●" : st.changed === false ? "✓" : "?"
-                // Liste nvd seulement si la partie est à appliquer et qu'une
-                // version de paquet change (sinon nvd ne dit que « No version
-                // … changes »).
-                bodyVisible: st.changed !== false || backend.run.active === true
-                readonly property var packages: st.changed === true ? (st.packages || []) : []
-                badgeColor: st.changed === true ? Kirigami.Theme.neutralTextColor
-                          : st.changed === false ? Kirigami.Theme.positiveTextColor
-                          : Kirigami.Theme.negativeTextColor
-
-
-                // Évaluation en échec : la dernière erreur de Nix.
-                Label {
-                    visible: partCard.st.changed === null && (page.pending.errors || []).length > 0
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    color: Kirigami.Theme.negativeTextColor
-                    font.family: Kirigami.Theme.fixedWidthFont.family
-                    text: (page.pending.errors || []).join("\n")
-                }
-                // Partie en cours de mise à jour : étape et avancement.
-                RunProgress { partId: partCard.modelData.key }
-                // Pourquoi : ce qui a changé depuis la dernière application.
-                Label {
-                    visible: (partCard.st.commits || []).length > 0
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                    text: "Commits non appliqués"
-                    font.bold: true
-                }
-                Repeater {
-                    model: partCard.st.commits || []
-                    Label {
-                        required property var modelData
-                        text: modelData.hash + "  " + modelData.subject
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                        font.family: Kirigami.Theme.fixedWidthFont.family
-                    }
-                }
-                Label {
-                    visible: (partCard.st.dirty || []).length > 0
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                    text: "Fichiers modifiés non committés"
-                    font.bold: true
-                }
-                Repeater {
-                    model: partCard.st.dirty || []
-                    Label {
-                        required property var modelData
-                        text: modelData.trim()
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                        font.family: Kirigami.Theme.fixedWidthFont.family
-                    }
-                }
-                Label {
-                    visible: partCard.packages.length > 0
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                    text: "Paquets qui changent"
-                    font.bold: true
-                }
-                Repeater {
-                    model: partCard.packages.slice(0, 8)
-                    RowLayout {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        Label { text: modelData.name }
-                        Label {
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                            opacity: 0.8
-                            text: modelData.kind.startsWith("A") ? "ajouté" + (modelData.change !== "<none>" ? " (" + modelData.change + ")" : "")
-                                : modelData.kind.startsWith("R") ? "retiré"
-                                : modelData.change + (modelData.kind.startsWith("D") ? " (version plus ancienne)" : "")
-                        }
-                    }
-                }
-                Label {
-                    visible: partCard.packages.length > 8
-                    opacity: 0.7
-                    text: "… et " + (partCard.packages.length - 8) + " autre(s)"
-                }
-                actions: [
-                    IconAction {
-                        iconName: "view-refresh-symbolic"
-                        visible: !window.running
-                        enabled: !backend.pendingBusy
-                        tooltip: "Vérifier cette partie seulement : évaluation (environ 10 s), comparée à la génération installée. nixos-update-center-engine pending --only " + partCard.modelData.key
-                        onClicked: backend.refreshPart(partCard.modelData.key)
-                    },
-                    Button {
-                        icon.name: "media-playback-start-symbolic"
-                        text: "Appliquer"
-                        enabled: !window.running && (partCard.st.changed !== false)
-                        visible: (partCard.st.changed !== false) && !window.running
-                        onClicked: backend.startUpdate([partCard.modelData.key === "system" ? "--system" : "--home"])
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 500
-                        ToolTip.text: (partCard.modelData.key === "system" ? "update --system : évaluation, construction de niri patché, nix build du système, sudo nixos-update-center-root switch-to (switch-to-configuration switch), push des commits, nh clean. Sautée si la génération évaluée est déjà installée." : "update --home : Claude Desktop, modèle Voxtype, évaluation, nix build de Home Manager, home-manager switch, push des commits, nh clean. Sautée si la génération évaluée est déjà installée.")
-                    }
-                ]
-            }
-        }
-
-        // ── Bloc 2 : nouvelles versions (bouton « Mettre à jour le flake ») ──
-
-        // Mise à jour du flake, en deux parties, chacune avec son action :
-        // - disponibles en ligne → « Adopter » (écrire dans flake.lock) ;
-        // - adoptées, à installer (avec les changements de flake.nix, qui
-        //   s'installent de la même façon) → « Appliquer ».
+        // ── Configuration : le dépôt face à ce qui est installé ──
+        // Commits, fichiers non committés, entrées adoptées dans flake.lock :
+        // tout s'installe par le même rebuild, système et/ou Home Manager,
+        // chacun avec sa ligne et son bouton en bas de la carte.
         Card {
-            id: flakeCard
+            id: confCard
+            readonly property var sys: page.apply.system || {}
+            readonly property var home: page.apply.home || {}
             readonly property var fl: page.apply.flake || {}
+            readonly property var parts: [
+                { key: "system", label: "Système (NixOS)", st: sys },
+                { key: "home", label: "Utilisateur (Home Manager)", st: home } ]
+            readonly property bool anyChanged: sys.changed === true || home.changed === true
+            readonly property bool allInstalled: sys.changed === false && home.changed === false
+            // Portée d'un élément : présent dans la liste de quelles parties.
+            function scope(inSys, inHome) {
+                return inSys && inHome ? "système et utilisateur" : inSys ? "système" : inHome ? "utilisateur" : "";
+            }
+            readonly property var unpushed: page.pending.unpushed || []
+            readonly property var uncommitted: (page.pending.uncommitted || []).map(f => {
+                const path = f.slice(3);
+                const has = l => (l || []).some(d => d.trim().slice(2).trim() === path);
+                const sc = path === "flake.nix" || path === "flake.lock" ? "flake"
+                         : confCard.scope(has(sys.dirty), has(home.dirty));
+                return { text: f.trim(), scope: sc };
+            })
+            // Commits à installer : réunis par hash, avec leur portée.
+            readonly property var commits: {
+                const out = [], idx = {};
+                const add = (list, key) => {
+                    for (const c of (list || [])) {
+                        if (!(c.hash in idx)) { idx[c.hash] = out.length; out.push({ hash: c.hash, subject: c.subject, sys: false, home: false, flake: false }); }
+                        out[idx[c.hash]][key] = true;
+                    }
+                };
+                add(sys.commits, "sys"); add(home.commits, "home"); add(fl.commits, "flake");
+                return out.map(c => ({ hash: c.hash, subject: c.subject,
+                    scope: [c.flake ? "flake.nix" : "", confCard.scope(c.sys, c.home)].filter(x => x).join(", ") }));
+            }
             readonly property var lockInputs: {
                 const seen = {}, out = [];
-                for (const i of ((page.apply.system || {}).inputs || []).concat((page.apply.home || {}).inputs || []))
+                for (const i of (sys.inputs || []).concat(home.inputs || []))
                     if (!seen[i.name]) { seen[i.name] = true; out.push(i); }
                 return out;
             }
+            readonly property var packages: (sys.changed === true ? (sys.packages || []).map(p => Object.assign({ scope: "système" }, p)) : [])
+                .concat(home.changed === true ? (home.packages || []).map(p => Object.assign({ scope: "utilisateur" }, p)) : [])
+
+            title: "Configuration"
+            badge: anyChanged ? "●" : allInstalled ? "✓" : "?"
+            badgeColor: anyChanged ? Kirigami.Theme.neutralTextColor
+                      : allInstalled ? Kirigami.Theme.positiveTextColor
+                      : Kirigami.Theme.negativeTextColor
+
+            // Évaluation en échec : la dernière erreur de Nix.
+            Label {
+                visible: (confCard.sys.changed === null || confCard.home.changed === null) && (page.pending.errors || []).length > 0
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Kirigami.Theme.negativeTextColor
+                font.family: Kirigami.Theme.fixedWidthFont.family
+                text: (page.pending.errors || []).join("\n")
+            }
+
+            // État du dépôt : ce qui n'est pas encore committé ou envoyé.
+            Heading {
+                visible: confCard.uncommitted.length > 0
+                Layout.topMargin: 0
+                text: "Non committé" + (confCard.allInstalled ? " (déjà appliqué)" : "")
+            }
+            Repeater {
+                model: confCard.uncommitted
+                ListLine { required property var modelData; text: modelData.text; scope: modelData.scope }
+            }
+            Heading {
+                visible: confCard.unpushed.length > 0
+                text: "Pas encore envoyé sur GitHub"
+                HoverHandler { id: unpushedHover }
+                ToolTip.visible: unpushedHover.hovered
+                ToolTip.text: "Envoyé par git push après une application réussie (jamais un flake.lock qui casse un switch)."
+            }
+            Repeater {
+                model: confCard.unpushed
+                ListLine { required property var modelData; text: modelData.hash + "  " + modelData.subject }
+            }
+
+            // À installer.
+            Heading {
+                visible: confCard.commits.length > 0
+                text: "Commits à installer"
+            }
+            Repeater {
+                model: confCard.commits
+                ListLine { required property var modelData; text: modelData.hash + "  " + modelData.subject; scope: modelData.scope }
+            }
+            Heading {
+                visible: confCard.lockInputs.length > 0
+                text: "Entrées du flake adoptées, à installer"
+            }
+            Repeater {
+                model: confCard.lockInputs
+                InputRow {
+                    required property var modelData
+                    input: modelData
+                    label: page.revLabel(modelData)
+                    url: page.compareUrl(modelData)
+                }
+            }
+            Heading {
+                visible: confCard.packages.length > 0
+                text: "Paquets qui changent"
+            }
+            Repeater {
+                model: confCard.packages.slice(0, 8)
+                RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Label { text: modelData.name }
+                    Label {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        opacity: 0.8
+                        text: modelData.kind.startsWith("A") ? "ajouté" + (modelData.change !== "<none>" ? " (" + modelData.change + ")" : "")
+                            : modelData.kind.startsWith("R") ? "retiré"
+                            : modelData.change + (modelData.kind.startsWith("D") ? " (version plus ancienne)" : "")
+                    }
+                    Label { text: modelData.scope; opacity: 0.6 }
+                }
+            }
+            Label {
+                visible: confCard.packages.length > 8
+                opacity: 0.7
+                text: "… et " + (confCard.packages.length - 8) + " autre(s)"
+            }
+
+            // Une ligne par partie : état, vérification, application.
+            Kirigami.Separator {
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                visible: confCard.uncommitted.length + confCard.unpushed.length + confCard.commits.length
+                         + confCard.lockInputs.length + confCard.packages.length > 0
+            }
+            Repeater {
+                model: confCard.parts
+                ColumnLayout {
+                    id: partRow
+                    required property var modelData
+                    readonly property var st: modelData.st
+                    Layout.fillWidth: true
+                    spacing: 0
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: partRow.st.changed === true ? "●" : partRow.st.changed === false ? "✓" : "?"
+                            font.bold: true
+                            color: partRow.st.changed === true ? Kirigami.Theme.neutralTextColor
+                                 : partRow.st.changed === false ? Kirigami.Theme.positiveTextColor
+                                 : Kirigami.Theme.negativeTextColor
+                        }
+                        Label { text: partRow.modelData.label }
+                        Label {
+                            Layout.fillWidth: true
+                            opacity: 0.7
+                            elide: Text.ElideRight
+                            text: partRow.st.changed === true ? (partRow.st.built ? "à appliquer, déjà préparé" : "à appliquer")
+                                : partRow.st.changed === false ? "à jour" : "état inconnu"
+                        }
+                        IconAction {
+                            iconName: "view-refresh-symbolic"
+                            visible: !window.running
+                            enabled: !backend.pendingBusy
+                            tooltip: "Vérifier cette partie seulement : évaluation (environ 10 s), comparée à la génération installée. nixos-update-center-engine pending --only " + partRow.modelData.key
+                            onClicked: backend.refreshPart(partRow.modelData.key)
+                        }
+                        Button {
+                            icon.name: "media-playback-start-symbolic"
+                            text: "Appliquer"
+                            visible: partRow.st.changed !== false && !window.running
+                            onClicked: backend.startUpdate([partRow.modelData.key === "system" ? "--system" : "--home"])
+                            ToolTip.visible: hovered
+                            ToolTip.delay: 500
+                            ToolTip.text: (partRow.modelData.key === "system" ? "update --system : évaluation, construction de niri patché, nix build du système, sudo nixos-update-center-root switch-to (switch-to-configuration switch), push des commits, nh clean. Sautée si la génération évaluée est déjà installée." : "update --home : Claude Desktop, modèle Voxtype, évaluation, nix build de Home Manager, home-manager switch, push des commits, nh clean. Sautée si la génération évaluée est déjà installée.")
+                        }
+                    }
+                    RunProgress { partId: partRow.modelData.key }
+                }
+            }
+        }
+
+        // ── Mise à jour du flake : nouvelles versions en ligne, à adopter
+        // (écrites dans flake.lock) ; elles s'installent ensuite avec la
+        // configuration. ──
+        Card {
+            id: flakeCard
             readonly property var online: page.upstream.inputs || []
-            readonly property int nixCommits: (fl.commits || []).length
-            readonly property bool nixDirty: (fl.dirty || []).length > 0
-            readonly property bool hasChanges: nixCommits > 0 || nixDirty || lockInputs.length > 0
             readonly property bool hasOnline: online.length > 0
             title: "Mise à jour du flake"
-            bodyVisible: hasChanges || hasOnline || !page.upstream.checked || window.running
-            badge: hasChanges || hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
-            badgeColor: hasChanges || hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
+            bodyVisible: hasOnline || !page.upstream.checked || window.running
+            badge: hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
+            badgeColor: hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flake" }
 
-            // ── Disponibles en ligne ──
             RowLayout {
                 visible: flakeCard.hasOnline || !page.upstream.checked
                 Layout.fillWidth: true
@@ -396,12 +460,12 @@ ScrollView {
                 Button {
                     icon.name: "media-playback-start-symbolic"
                     text: "Adopter"
-                    visible: !window.running
+                    visible: !window.running && flakeCard.hasOnline
                     enabled: !backend.prebuildActive
                     onClicked: backend.checkUpdates()
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier (la routine). Rien n'est installé : elles passent dans « Adoptées, à installer »."
+                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier (la routine). Rien n'est installé : elles passent dans « Configuration », à installer."
                 }
             }
             Repeater {
@@ -413,49 +477,6 @@ ScrollView {
                     url: page.compareUrl(modelData)
                     updatable: true
                 }
-            }
-
-            // ── Adoptées, à installer ──
-            RowLayout {
-                visible: flakeCard.hasChanges
-                Layout.fillWidth: true
-                Layout.topMargin: flakeCard.hasOnline ? Kirigami.Units.largeSpacing : 0
-                Label {
-                    Layout.fillWidth: true
-                    text: "Adoptées, à installer"
-                    font.bold: true
-                }
-                Button {
-                    icon.name: "media-playback-start-symbolic"
-                    text: "Appliquer"
-                    visible: !window.running
-                    onClicked: backend.startUpdate(["--system", "--home"])
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "update --system --home : installer ce qui est adopté dans flake.lock, avec les changements de flake.nix : système puis Home Manager, chacun sauté s'il est déjà à jour."
-                }
-            }
-            Repeater {
-                model: flakeCard.lockInputs
-                InputRow {
-                    required property var modelData
-                    input: modelData
-                    label: page.revLabel(modelData)
-                    url: page.compareUrl(modelData)
-                }
-            }
-            // flake.nix modifié : s'installe avec « Appliquer », comme les
-            // entrées adoptées.
-            Label {
-                visible: flakeCard.nixCommits > 0 || flakeCard.nixDirty
-                Layout.fillWidth: true
-                elide: Text.ElideRight
-                text: "flake.nix modifié"
-                      + (flakeCard.nixCommits > 0 ? " (" + flakeCard.nixCommits + " commit" + (flakeCard.nixCommits > 1 ? "s" : "") + ")" : "")
-                      + (flakeCard.nixDirty ? (flakeCard.nixCommits > 0 ? ", plus des modifications non committées" : ", non committé") : "")
-                HoverHandler { id: flakeNixHover }
-                ToolTip.visible: flakeNixHover.hovered && flakeCard.nixCommits > 0
-                ToolTip.text: (flakeCard.fl.commits || []).map(c => c.hash + "  " + c.subject).join("\n")
             }
 
             actions: [
