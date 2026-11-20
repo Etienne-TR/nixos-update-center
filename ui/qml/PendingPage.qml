@@ -421,25 +421,12 @@ ScrollView {
             badge: hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
 
-            RowLayout {
+            Heading {
                 visible: flakeCard.hasOnline || !page.upstream.checked
                 Layout.fillWidth: true
-                Heading {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 0
-                    text: page.upstream.checked ? (flakeCard.online.length > 1 ? "Disponibles en ligne" : "Disponible en ligne") : "En ligne : pas encore recherché (ou réseau indisponible)"
-                    font.weight: page.upstream.checked ? Font.DemiBold : Font.Normal
-                }
-                Button {
-                    icon.name: "media-playback-start-symbolic"
-                    text: "Adopter"
-                    visible: !window.running && flakeCard.hasOnline
-                    enabled: !backend.prebuildActive
-                    onClicked: backend.checkUpdates()
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update), puis, préparer en arrière-plan et notifier (la routine). Rien n'est installé ni committé : flake.lock passe dans « Configuration Nix », committé et publié après une application réussie."
-                }
+                Layout.topMargin: 0
+                text: page.upstream.checked ? (flakeCard.online.length > 1 ? "Disponibles en ligne" : "Disponible en ligne") : "En ligne : pas encore recherché (ou réseau indisponible)"
+                font.weight: page.upstream.checked ? Font.DemiBold : Font.Normal
             }
             Repeater {
                 model: flakeCard.online
@@ -452,7 +439,19 @@ ScrollView {
                 }
             }
 
+            // Adopter sur la ligne de titre, comme les autres actions
+            // principales ; ↻ toujours en dernier.
             actions: [
+                Button {
+                    icon.name: "media-playback-start-symbolic"
+                    text: "Adopter"
+                    visible: !window.running && flakeCard.hasOnline
+                    enabled: !backend.prebuildActive
+                    onClicked: backend.checkUpdates()
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "Adopter toutes les nouvelles versions : les écrire dans flake.lock (nix flake update), puis préparer en arrière-plan. Rien n'est installé ni committé : flake.lock passe dans « Configuration Nix », committé et publié après une application réussie."
+                },
                 IconAction {
                     iconName: "view-refresh-symbolic"
                     enabled: !window.running && !backend.checking("flake")
