@@ -284,28 +284,28 @@ ScrollView {
                 text: "Actions en attente"
             }
             // Ligne cliquable (liste des paquets) quand la préparation l'a
-            // calculée ; le « i » suit le texte.
+            // calculée.
             RowLayout {
                 id: installLine
                 readonly property bool clickable: confCard.packages.length > 0
                 visible: confCard.anyChanged
                 Layout.fillWidth: true
                 HoverHandler { id: installHover; cursorShape: installLine.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor }
-                TapHandler { enabled: installLine.clickable; onTapped: packagesDialog.open() }
+                // Comme les entrées : clic, menu sous le curseur.
+                TapHandler { enabled: installLine.clickable; onTapped: (point) => installMenu.popup(installLine, point.position.x, installLine.height) }
+                Menu {
+                    id: installMenu
+                    MenuItem {
+                        text: "Voir les paquets"
+                        icon.name: "view-list-details-symbolic"
+                        onTriggered: packagesDialog.open()
+                    }
+                }
                 Label {
                     color: installHover.hovered && installLine.clickable ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
                     text: confCard.packages.length > 0
                         ? "Installation de " + confCard.packages.length + (confCard.packages.length > 1 ? " paquets" : " paquet")
                         : "Installation de la nouvelle configuration"
-                }
-                IconAction {
-                    visible: installLine.clickable
-                    // Au survol de la ligne seulement, comme pour les entrées.
-                    opacity: installHover.hovered ? 1 : 0
-                    highlighted: installHover.hovered
-                    iconName: "help-about-symbolic"
-                    tooltip: "Voir les paquets"
-                    onClicked: packagesDialog.open()
                 }
                 Item { Layout.fillWidth: true; Layout.preferredWidth: 0 }
                 Label {
