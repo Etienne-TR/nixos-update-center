@@ -205,6 +205,9 @@ ScrollView {
                 .concat(home.changed === true ? (home.packages || []).map(p => Object.assign({ scope: "utilisateur" }, p)) : [])
 
             title: "Configuration Nix"
+            // Rien à montrer (tout installé, dépôt propre) : titre seul.
+            bodyVisible: files.length + unpushed.length + lockInputs.length + packages.length > 0
+                || sys.changed === null || home.changed === null
             badge: anyChanged ? "●" : allInstalled ? "✓" : "?"
             badgeColor: anyChanged ? Kirigami.Theme.neutralTextColor
                       : allInstalled ? Kirigami.Theme.positiveTextColor
