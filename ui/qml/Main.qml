@@ -154,6 +154,69 @@ ApplicationWindow {
         }
     }
 
+    // Ce qui tourne en ce moment, en bas de la fenêtre (le contenu ne bouge
+    // pas) : un bandeau pour Nix (mise à jour, préparation, recherche), un
+    // pour les Flatpaks, qui peuvent tourner en même temps. Pas dans l'onglet
+    // En cours, qui en montre le détail.
+    component StatusStrip: ToolBar {
+        id: strip
+        property string text
+        property real progress: -1
+        property bool showProgress: false
+        position: ToolBar.Footer
+        Layout.fillWidth: true
+        topPadding: Kirigami.Units.smallSpacing
+        bottomPadding: Kirigami.Units.smallSpacing
+        contentItem: RowLayout {
+            spacing: Kirigami.Units.largeSpacing
+            BusyIndicator {
+                running: strip.visible
+                implicitHeight: Kirigami.Units.iconSizes.small
+                implicitWidth: implicitHeight
+            }
+            Label {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                text: strip.text
+            }
+            ProgressBar {
+                visible: strip.showProgress
+                Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+                from: 0; to: 1
+                indeterminate: strip.progress < 0
+                value: Math.max(0, strip.progress)
+            }
+            IconAction {
+                iconName: "utilities-terminal-symbolic"
+                tooltip: "Voir le détail et le journal (onglet En cours)"
+                onClicked: window.showRunTab()
+            }
+        }
+    }
+    readonly property bool checking: backend.pendingBusy && !backend.pendingQuick
+    readonly property bool flatpakBusy: backend.flatpakRun.active === true
+        || (window.running && (backend.run.parts || []).some(p => p.id === "flatpak" && p.state === "running"))
+    footer: ColumnLayout {
+        spacing: 0
+        visible: tabs.currentIndex !== 1
+        StatusStrip {
+            visible: window.running || backend.prebuildActive || (window.checking && backend.pendingPart !== "flatpak")
+            showProgress: window.running || backend.prebuildActive
+            progress: backend.progress
+            text: window.running || backend.prebuildActive ? backend.summary
+                : ({ system: "Vérification de la configuration système…",
+                     home: "Vérification de la configuration utilisateur…",
+                     config: "Vérification de la configuration…",
+                     flake: "Recherche des mises à jour des entrées du flake…" }[backend.pendingPart]
+                   || "Recherche de toutes les mises à jour…")
+        }
+        StatusStrip {
+            visible: window.flatpakBusy || (window.checking && backend.pendingPart === "flatpak")
+            showProgress: window.flatpakBusy
+            text: window.flatpakBusy ? "Mise à jour des Flatpaks…" : "Recherche des mises à jour Flatpak…"
+        }
+    }
+
     StackLayout {
         anchors.fill: parent
         anchors.margins: Kirigami.Units.largeSpacing

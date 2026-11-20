@@ -107,58 +107,6 @@ ScrollView {
             }
         }
 
-        // Ce qui se passe en ce moment, en haut de l'onglet : mise à jour,
-        // préparation ou recherche, avec l'étape et l'avancement.
-        Frame {
-            id: activity
-            readonly property bool checking: backend.pendingBusy && !backend.pendingQuick
-            visible: window.running || backend.prebuildActive || checking
-            Layout.fillWidth: true
-            background: Rectangle {
-                color: Qt.alpha(Kirigami.Theme.highlightColor, 0.15)
-                radius: Kirigami.Units.cornerRadius
-            }
-            RowLayout {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                spacing: Kirigami.Units.largeSpacing
-                BusyIndicator {
-                    running: activity.visible
-                    implicitHeight: Kirigami.Units.iconSizes.medium
-                    implicitWidth: implicitHeight
-                }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
-                    Label {
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        font.bold: true
-                        text: window.running || backend.prebuildActive ? backend.summary
-                            : ({ system: "Vérification de la configuration système…",
-                                 home: "Vérification de la configuration utilisateur…",
-                                 config: "Vérification de la configuration…",
-                                 flake: "Recherche des mises à jour des entrées du flake…",
-                                 flatpak: "Recherche des mises à jour Flatpak…" }[backend.pendingPart]
-                               || "Recherche de toutes les mises à jour…")
-                    }
-                    ProgressBar {
-                        visible: window.running || backend.prebuildActive
-                        Layout.fillWidth: true
-                        from: 0; to: 1
-                        indeterminate: backend.progress < 0
-                        value: Math.max(0, backend.progress)
-                    }
-                }
-                IconAction {
-                    visible: window.running || backend.prebuildActive
-                    iconName: "utilities-terminal-symbolic"
-                    tooltip: "Voir le détail et le journal (onglet En cours)"
-                    onClicked: window.showRunTab()
-                }
-            }
-        }
-
         Card {
             title: "Préparation en arrière-plan"
             subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale") : ""
@@ -383,10 +331,6 @@ ScrollView {
                 text: "… et " + (confCard.packages.length - 8) + (confCard.packages.length - 8 > 1 ? " autres" : " autre")
             }
 
-            // Avancement de la partie en cours pendant une application.
-            RunProgress { partId: "system" }
-            RunProgress { partId: "home" }
-
             actions: [
                 IconAction {
                     iconName: "view-refresh-symbolic"
@@ -447,7 +391,6 @@ ScrollView {
             bodyVisible: hasOnline || !page.upstream.checked || window.running
             badge: hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
-            RunProgress { partId: "flake" }
 
             RowLayout {
                 visible: flakeCard.hasOnline || !page.upstream.checked
@@ -498,25 +441,9 @@ ScrollView {
             readonly property bool busy: backend.flatpakRun.active === true
                 || (window.running && (backend.run.parts || []).some(p => p.id === "flatpak" && (p.state === "running" || p.state === "pending")))
             title: "Flatpaks"
-            bodyVisible: (page.pending.flatpaks || []).length > 0 || busy
+            bodyVisible: (page.pending.flatpaks || []).length > 0
             badge: (page.pending.flatpaks || []).length > 0 ? "●" : "✓"
             badgeColor: (page.pending.flatpaks || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
-            RunProgress { partId: "flatpak" }
-            RowLayout {
-                visible: backend.flatpakRun.active === true
-                Layout.fillWidth: true
-                BusyIndicator {
-                    running: parent.visible
-                    implicitHeight: Kirigami.Units.iconSizes.small
-                    implicitWidth: implicitHeight
-                }
-                Label { text: "Mise à jour en cours…"; Layout.fillWidth: true }
-                IconAction {
-                    iconName: "utilities-terminal-symbolic"
-                    tooltip: "Voir le journal (onglet En cours)"
-                    onClicked: window.showRunTab()
-                }
-            }
             Repeater {
                 model: page.pending.flatpaks || []
                 // « GIMP  3.2.8 → 3.2.9 · 102,5 Mo (4 jours) » ; même version :
