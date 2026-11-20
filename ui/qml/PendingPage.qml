@@ -43,6 +43,12 @@ ScrollView {
     function shortDate(secs) {
         return secs ? new Date(secs * 1000).toLocaleDateString(Qt.locale("fr_FR"), "d MMM yyyy") : "?";
     }
+    // Message de commit affiché : ceux de flake.lock, faits par le centre
+    // (« chore(flake): mise à jour de a, b »), en « flake.lock : a, b ».
+    function commitText(subject) {
+        const m = /^chore\(flake\): mise à jour (?:de |du )(.*)$/.exec(subject || "");
+        return m ? "flake.lock : " + m[1].replace(/^flake\.lock$/, "toutes les entrées") : subject;
+    }
     function compareUrl(input) {
         if (input.to.type !== "github" || !input.from || !input.from.rev || !input.to.rev) return "";
         return "https://github.com/" + input.to.owner + "/" + input.to.repo + "/compare/"
@@ -275,7 +281,7 @@ ScrollView {
                            : st.includes("D") ? "supprimé, non committé" : "non committé";
                 return { text: path, scope: what + (allInstalled ? ", appliqué" : "") };
             }).concat(unpushed.filter(c => !commits.some(k => k.hash === c.hash))
-                       .map(c => ({ text: c.subject, scope: "committé, non publié" })))
+                       .map(c => ({ text: page.commitText(c.subject), scope: "committé, non publié" })))
             // Commits à installer : réunis par hash, avec leur portée.
             readonly property var commits: {
                 const out = [], idx = {};
@@ -338,7 +344,7 @@ ScrollView {
             }
             Repeater {
                 model: confCard.commits
-                ListLine { required property var modelData; text: modelData.subject; scope: modelData.scope }
+                ListLine { required property var modelData; text: page.commitText(modelData.subject); scope: modelData.scope }
             }
             Heading {
                 visible: confCard.lockInputs.length > 0
