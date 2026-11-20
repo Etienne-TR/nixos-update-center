@@ -108,11 +108,26 @@ ScrollView {
         }
 
         Card {
+            id: prepCard
             title: "Préparation en arrière-plan"
+            // État de la préparation face à ce qui est à appliquer :
+            // none (rien à appliquer), ready (tout ce qui est à appliquer est
+            // déjà construit), stale (à construire), unknown (évaluation
+            // impossible).
+            readonly property var sysSt: page.apply.system || {}
+            readonly property var homeSt: page.apply.home || {}
+            readonly property string prep: {
+                const parts = [sysSt, homeSt];
+                if (parts.some(p => p.changed !== true && p.changed !== false)) return "unknown";
+                const todo = parts.filter(p => p.changed === true);
+                if (todo.length === 0) return "none";
+                return todo.every(p => p.built) ? "ready" : "stale";
+            }
             // En cours : seulement les actions ; l'avancement est dans le
-            // bandeau du bas.
-            bodyVisible: !backend.prebuildActive
-            subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale") : ""
+            // bandeau du bas. Rien à appliquer : titre seul.
+            bodyVisible: !backend.prebuildActive && prep !== "none"
+            subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale")
+                    : page.result.time && prep !== "none" ? window.when(page.result.time) : ""
             actions: [
             Button {
                 visible: backend.prebuildActive
@@ -143,7 +158,7 @@ ScrollView {
                 ToolTip.text: "journalctl -f -u nixos-update-center-prebuild, dans un terminal."
             },
             Button {
-                visible: (!backend.prebuildActive) && !window.running
+                visible: !backend.prebuildActive && !window.running && (prepCard.prep === "stale" || prepCard.prep === "unknown")
                 icon.name: "media-playback-start-symbolic"
                 text: "Préparer"
                 enabled: !window.running
@@ -163,11 +178,14 @@ ScrollView {
                     wrapMode: Text.WordWrap
                     text: {
                         const r = page.result;
-                        if (!r.state) return "Aucune préparation pour l'instant. Elle se lance avec la routine hebdomadaire.";
-                        const when = window.when(r.time);
-                        if (r.state === "success") return "Dernière préparation terminée " + when + ".";
-                        if (r.state === "failed") return "Dernière préparation incomplète " + when + " : la mise à jour reprendra ce qui manque.";
-                        return "Dernière préparation arrêtée " + when + ".";
+                        if (prepCard.prep === "ready") return "Prête : Appliquer n'aura qu'à activer.";
+                        if (prepCard.prep === "stale") {
+                            if (!r.state) return "Pas encore préparée : Appliquer construira tout.";
+                            if (r.state === "failed") return "Incomplète : Appliquer construira ce qui manque.";
+                            if (r.state === "stopped") return "Arrêtée avant la fin : Appliquer construira ce qui manque.";
+                            return "Dépassée : la config a changé depuis la dernière préparation.";
+                        }
+                        return "État inconnu : la configuration n'a pas pu être évaluée.";
                     }
                 }
             }
