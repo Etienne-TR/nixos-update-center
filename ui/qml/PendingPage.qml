@@ -275,30 +275,14 @@ ScrollView {
             readonly property var unpushed: page.pending.unpushed || []
             // État du dépôt git, une ligne par élément : fichier non committé
             // (« nouveau », « supprimé » selon git status) ou commit non publié.
+            // État du dépôt git, une ligne par élément : fichier modifié (pas
+            // committé) ou commit pas encore publié. Ce qui reste à appliquer
+            // se lit aux boutons de la carte.
             readonly property var repoLines: (page.pending.uncommitted || []).map(f => {
                 const st = f.slice(0, 2), path = f.slice(3);
-                const what = st === "??" || st.includes("A") ? "nouveau, non committé"
-                           : st.includes("D") ? "supprimé, non committé" : "non committé";
-                return { text: path, scope: what + (allInstalled ? ", appliqué" : "") };
-            }).concat(unpushed.filter(c => !commits.some(k => k.hash === c.hash))
-                       .map(c => ({ text: page.commitText(c.subject), scope: "committé, non publié" })))
-            // Commits à installer : réunis par hash, avec leur portée.
-            readonly property var commits: {
-                const out = [], idx = {};
-                const add = (list, key) => {
-                    for (const c of (list || [])) {
-                        if (!(c.hash in idx)) { idx[c.hash] = out.length; out.push({ hash: c.hash, subject: c.subject, sys: false, home: false, flake: false }); }
-                        out[idx[c.hash]][key] = true;
-                    }
-                };
-                add(sys.commits, "sys"); add(home.commits, "home"); add(fl.commits, "flake");
-                // Un commit pas encore sur GitHub n'est listé qu'ici, avec
-                // « non publié ».
-                const unpub = h => unpushed.some(u => u.hash === h);
-                return out.map(c => ({ hash: c.hash, subject: c.subject,
-                    scope: [c.flake ? "flake.nix" : "", confCard.scope(c.sys, c.home),
-                            unpub(c.hash) ? "committé, non publié" : ""].filter(x => x).join(", ") }));
-            }
+                return { text: path, scope: st === "??" || st.includes("A") ? "nouveau"
+                                          : st.includes("D") ? "supprimé" : "modifié" };
+            }).concat(unpushed.map(c => ({ text: page.commitText(c.subject), scope: "committé" })))
             readonly property var lockInputs: {
                 const seen = {}, out = [];
                 for (const i of (sys.inputs || []).concat(home.inputs || []))
@@ -330,7 +314,7 @@ ScrollView {
                 text: "État du dépôt git"
                 HoverHandler { id: repoHover }
                 ToolTip.visible: repoHover.hovered
-                ToolTip.text: "Fichiers non committés (le centre ne committe que flake.lock, après une application réussie) et commits locaux pas encore sur GitHub (publiés par git push après une application réussie)."
+                ToolTip.text: "Modifié : fichier pas encore committé (le centre ne committe que flake.lock, après une application réussie). Committé : commit pas encore publié sur GitHub (git push après une application réussie)."
             }
             Repeater {
                 model: confCard.repoLines
@@ -338,14 +322,6 @@ ScrollView {
             }
 
             // À installer.
-            Heading {
-                visible: confCard.commits.length > 0
-                text: confCard.commits.length > 1 ? "Commits" : "Commit"
-            }
-            Repeater {
-                model: confCard.commits
-                ListLine { required property var modelData; text: page.commitText(modelData.subject); scope: modelData.scope }
-            }
             Heading {
                 visible: confCard.lockInputs.length > 0
                 text: confCard.lockInputs.length > 1 ? "Entrées du flake adoptées" : "Entrée du flake adoptée"
