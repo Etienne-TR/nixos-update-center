@@ -33,13 +33,12 @@ RowLayout {
             visible: row.updatable
             height: visible ? implicitHeight : 0
             text: "Adopter"
-            icon.name: "media-playback-start-symbolic"
             enabled: !window.running
             onTriggered: backend.updateInput(row.input.name)
         }
         MenuItem {
-            text: "Voir les changements sur GitHub"
-            icon.name: "internet-web-browser-symbolic"
+            // Comparaison entre les deux révisions (GitHub pour l'instant).
+            text: "Voir les changements"
             enabled: row.url.length > 0
             onTriggered: Qt.openUrlExternally(row.url)
         }

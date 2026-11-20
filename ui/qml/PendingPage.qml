@@ -297,7 +297,6 @@ ScrollView {
                     id: installMenu
                     MenuItem {
                         text: "Voir les paquets"
-                        icon.name: "view-list-details-symbolic"
                         onTriggered: packagesDialog.open()
                     }
                 }
