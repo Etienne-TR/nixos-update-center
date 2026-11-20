@@ -17,6 +17,8 @@ class Backend : public QObject {
   Q_PROPERTY(QVariantMap run READ run NOTIFY runChanged)
   // Avancement de la construction en cours pendant une exécution.
   Q_PROPERTY(QVariantMap build READ build NOTIFY runChanged)
+  // Mise à jour des Flatpaks lancée seule (flatpak.json), avec « active ».
+  Q_PROPERTY(QVariantMap flatpakRun READ flatpakRun NOTIFY flatpakRunChanged)
   Q_PROPERTY(QString log READ log NOTIFY logChanged)
   // Journal du service de préparation (journalctl), lu à la demande.
   Q_PROPERTY(QString prebuildLog READ prebuildLog NOTIFY prebuildLogChanged)
@@ -48,6 +50,7 @@ class Backend : public QObject {
 
   QVariantMap run() const { return m_run; }
   QVariantMap build() const { return m_build; }
+  QVariantMap flatpakRun() const { return m_flatpakRun; }
   QString log() const { return m_log; }
   QString prebuildLog() const { return m_prebuildLog; }
   bool prebuildActive() const { return !m_prebuild.isEmpty(); }
@@ -70,6 +73,8 @@ class Backend : public QObject {
 
   Q_INVOKABLE void startUpdate(const QStringList &parts);
   Q_INVOKABLE void checkUpdates();
+  // Flatpaks seuls, dans leur propre unité : possible pendant une exécution.
+  Q_INVOKABLE void startFlatpakUpdate();
   // nix flake update <entrée> (commit de flake.lock), dans l'unité de mise à jour.
   Q_INVOKABLE void updateInput(const QString &name);
   Q_INVOKABLE void refreshRoutine();
@@ -94,6 +99,7 @@ class Backend : public QObject {
 
  signals:
   void runChanged();
+  void flatpakRunChanged();
   void logChanged();
   void prebuildLogChanged();
   void prebuildChanged();
@@ -110,6 +116,7 @@ class Backend : public QObject {
  private:
   void poll();
   void readRun();
+  void readFlatpakRun();
   void readLogTail();
   void readPrebuild();
   void readPending();
@@ -127,6 +134,7 @@ class Backend : public QObject {
   QString configStamp() const;
   void runPending(const QStringList &args);
   void runEngine(const QStringList &args, std::function<void(int, const QByteArray &)> done);
+  QVariantMap m_flatpakRun;
   QVariantMap m_run, m_build, m_prebuild, m_prebuildResult, m_pending, m_generations;
   QVariantList m_history;
   QString m_prebuildLog;

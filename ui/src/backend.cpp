@@ -102,6 +102,7 @@ void Backend::notify(const QString &icon, const QString &title, const QString &b
 
 void Backend::poll() {
   readRun();
+  readFlatpakRun();
   readPrebuild();
   readPending();
   readHistory();
@@ -131,6 +132,20 @@ void Backend::readRun() {
     }
   }
   readLogTail();
+}
+
+void Backend::readFlatpakRun() {
+  QVariantMap run = readJson(m_state + "/flatpak.json");
+  const qint64 pid = run.value("pid").toLongLong();
+  const bool active =
+      run.value("state").toString() == "running" && pid > 0 && ::kill(pid_t(pid), 0) == 0;
+  run.insert("active", active);
+  if (run == m_flatpakRun) return;
+  const bool wasActive = m_flatpakRun.value("active").toBool();
+  m_flatpakRun = run;
+  emit flatpakRunChanged();
+  // Fin : nouvelle liste des Flatpaks à mettre à jour.
+  if (wasActive && !active) refreshPart("flatpak");
 }
 
 // Journal de l'exécution, lu au fur et à mesure (derniers 400 Ko).
@@ -281,6 +296,13 @@ void Backend::checkUpdates() {
                                           "--setenv=PATH=" + qEnvironmentVariable("PATH"), m_engine,
                                           "weekly", "--manual"});
   emit runStarted();
+}
+
+void Backend::startFlatpakUpdate() {
+  QProcess::startDetached("systemd-run", {"--user", "--collect", "--quiet",
+                                          QStringLiteral("--unit=" APP_NAME "-flatpak"),
+                                          "--setenv=PATH=" + qEnvironmentVariable("PATH"), m_engine,
+                                          "flatpak-update"});
 }
 
 void Backend::runEngine(const QStringList &args, std::function<void(int, const QByteArray &)> done) {

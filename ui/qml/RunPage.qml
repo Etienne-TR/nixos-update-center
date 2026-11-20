@@ -23,6 +23,10 @@ ColumnLayout {
     readonly property var run: backend.run
     readonly property var pre: backend.prebuild
     readonly property var result: backend.prebuildResult
+    readonly property var fp: backend.flatpakRun
+    // Journal des Flatpaks : celui de l'exécution en parallèle, sinon celui
+    // de la dernière mise à jour seule.
+    readonly property string fpLog: run.active && run.flatpakLog ? run.flatpakLog : (fp.log || "")
     readonly property var tasks: {
         const t = [];
         if (backend.pendingBusy && !backend.pendingQuick)
@@ -34,8 +38,14 @@ ColumnLayout {
                        : "aucune" });
         // Flatpaks en parallèle de la mise à jour : tâche à part, avec son
         // journal.
+        // ou lancée seule (flatpak.json).
         if (run.active && run.flatpakLog)
             t.push({ id: "flatpak", title: "Mise à jour des Flatpaks", state: "running", detail: "en parallèle" });
+        else if (fp.state)
+            t.push({ id: "flatpak", title: "Mise à jour des Flatpaks",
+                     state: fp.active ? "running" : fp.state,
+                     detail: fp.active ? "en cours"
+                           : ({success: "terminée", failed: "en échec", stopped: "arrêtée"}[fp.state] || fp.state) + ", " + window.when(fp.finished || fp.started) });
         t.push({ id: "prebuild", title: "Préparation en arrière-plan",
                  state: backend.prebuildActive ? "running" : (result.state || ""),
                  detail: backend.prebuildActive ? (pre.fraction >= 0 ? Math.round(pre.fraction * 100) + " %" : "évaluation")
@@ -292,7 +302,8 @@ ColumnLayout {
                 property string log: ""
                 DetailHeader {
                     title: "Mise à jour des Flatpaks"
-                    subtitle: "en parallèle de la mise à jour"
+                    subtitle: page.run.active && page.run.flatpakLog ? "en parallèle de la mise à jour"
+                            : page.fp.active ? "en cours" : page.fp.started ? "lancée " + window.when(page.fp.started) : ""
                 }
                 MonoText {
                     Layout.fillHeight: true
@@ -303,9 +314,9 @@ ColumnLayout {
                     interval: 1000
                     repeat: true
                     triggeredOnStart: true
-                    running: window.visible && page.visible && page.current === "flatpak"
+                    running: window.visible && page.visible && page.current === "flatpak" && page.fpLog.length > 0
                     // Barres de progression (\r) : seul leur dernier état.
-                    onTriggered: flatpakDetail.log = backend.readLog(page.run.flatpakLog)
+                    onTriggered: flatpakDetail.log = backend.readLog(page.fpLog)
                         .split("\n").map(l => l.split("\r").pop()).join("\n")
                 }
             }

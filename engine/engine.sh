@@ -435,14 +435,46 @@ part_home() {
   fi
 }
 
+# Une seule mise à jour Flatpak à la fois (exécution complète, ou
+# flatpak-update lancé à côté) : la seconde attend la première.
 part_flatpak() {
-  flatpak update --user -y --noninteractive || return 1
-  # Sans le bloc « These runtimes … are pinned and won't be removed »
-  # répété à chaque fois. pipefail garde l'échec de flatpak.
-  flatpak uninstall --user --unused -y --noninteractive 2>&1 |
-    awk '/^These runtimes in installation .* are pinned/ { skip = 1; next }
-         skip && (/^[[:space:]]/ || /^$/) { next }
-         { skip = 0; print }' || return 1
+  (
+    flock 7
+    flatpak update --user -y --noninteractive || exit 1
+    # Sans le bloc « These runtimes … are pinned and won't be removed »
+    # répété à chaque fois. pipefail garde l'échec de flatpak.
+    flatpak uninstall --user --unused -y --noninteractive 2>&1 |
+      awk '/^These runtimes in installation .* are pinned/ { skip = 1; next }
+           skip && (/^[[:space:]]/ || /^$/) { next }
+           { skip = 0; print }' || exit 1
+  ) 7>"$state/flatpak.lock"
+}
+
+# Mise à jour des Flatpaks seule, à côté d'une exécution Nix (adopter,
+# appliquer) : état dans flatpak.json (même forme que run.json), journal à
+# part, entrée dans l'historique.
+cmd_flatpak_update() {
+  [ "$(cfg .flatpak)" = true ] || die "Flatpak désactivé dans la configuration."
+  mkdir -p "$state/runs"
+  run_id="$(date +%Y%m%d-%H%M%S)-flatpak"
+  run_log="$state/runs/$run_id.log"
+  run_started=$(now) run_state=running run_step="Mise à jour des Flatpaks"
+  part_order=(flatpak)
+  part_label[flatpak]="Flatpak"
+  part_state[flatpak]=running
+  local out="$state/flatpak.json"
+  run_record | write_json "$out"
+  trap 'run_state=stopped part_state[flatpak]=failed run_finished=$(now); run_record | write_json "$out"; run_record | jq -c . >>"$history"; exit 143' TERM
+  if part_flatpak >"$run_log" 2>&1; then
+    run_state=success part_state[flatpak]=success
+  else
+    run_state=failed part_state[flatpak]=failed
+    notify dialog-error-symbolic "Mise à jour des Flatpaks en échec" "Voir le journal : onglet Historique" -t 0
+  fi
+  run_finished=$(now) run_step=""
+  run_record | write_json "$out"
+  run_record | jq -c . >>"$history"
+  [ "$run_state" = success ]
 }
 
 rollback_system_gen="" rollback_home_gen=""
@@ -1264,6 +1296,7 @@ cmd="${1:-}"
 [ $# -eq 0 ] || shift
 case "$cmd" in
   run) cmd_run "$@" ;;
+  flatpak-update) cmd_flatpak_update ;;
   prebuild) cmd_prebuild ;;
   pending) cmd_pending "$@" ;;
   generations) cmd_generations ;;

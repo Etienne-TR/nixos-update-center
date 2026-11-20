@@ -461,11 +461,31 @@ ScrollView {
         }
 
         Card {
+            id: fpCard
+            // Flatpaks en cours de mise à jour : seuls (flatpak-update) ou
+            // dans une exécution complète.
+            readonly property bool busy: backend.flatpakRun.active === true
+                || (window.running && (backend.run.parts || []).some(p => p.id === "flatpak" && (p.state === "running" || p.state === "pending")))
             title: "Flatpaks"
-            bodyVisible: (page.pending.flatpaks || []).length > 0 || window.running
+            bodyVisible: (page.pending.flatpaks || []).length > 0 || busy
             badge: (page.pending.flatpaks || []).length > 0 ? "●" : "✓"
             badgeColor: (page.pending.flatpaks || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             RunProgress { partId: "flatpak" }
+            RowLayout {
+                visible: backend.flatpakRun.active === true
+                Layout.fillWidth: true
+                BusyIndicator {
+                    running: parent.visible
+                    implicitHeight: Kirigami.Units.iconSizes.small
+                    implicitWidth: implicitHeight
+                }
+                Label { text: "Mise à jour en cours…"; Layout.fillWidth: true }
+                IconAction {
+                    iconName: "utilities-terminal-symbolic"
+                    tooltip: "Voir le journal (onglet En cours)"
+                    onClicked: window.showRunTab()
+                }
+            }
             Repeater {
                 model: page.pending.flatpaks || []
                 // « GIMP  3.2.8 → 3.2.9 · 102,5 Mo (4 jours) » ; même version :
@@ -501,20 +521,21 @@ ScrollView {
             actions: [
                 IconAction {
                     iconName: "view-refresh-symbolic"
-                    visible: !window.running
+                    visible: !fpCard.busy
                     enabled: !backend.pendingBusy
                     tooltip: "Rechercher les mises à jour Flatpak seulement : flatpak remote-ls --updates --user. nixos-update-center-engine pending --only flatpak"
                     onClicked: backend.refreshPart("flatpak")
                 },
+                // Possible pendant une exécution Nix (adopter, appliquer) :
+                // les Flatpaks ont leur propre unité.
                 Button {
                     icon.name: "media-playback-start-symbolic"
                     text: "Mettre à jour"
-                    enabled: !window.running && ((page.pending.flatpaks || []).length > 0)
-                    visible: ((page.pending.flatpaks || []).length > 0) && !window.running
-                    onClicked: backend.startUpdate(["--flatpak"])
+                    visible: ((page.pending.flatpaks || []).length > 0) && !fpCard.busy
+                    onClicked: backend.startFlatpakUpdate()
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "update --flatpak : flatpak update --user, puis flatpak uninstall --user --unused."
+                    ToolTip.text: "nixos-update-center-engine flatpak-update (unité nixos-update-center-flatpak) : flatpak update --user, puis flatpak uninstall --user --unused. Possible pendant une mise à jour Nix."
                 }
             ]
         }
