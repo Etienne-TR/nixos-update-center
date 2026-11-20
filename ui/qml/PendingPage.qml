@@ -55,6 +55,13 @@ ScrollView {
         const g = backend.generations, cur = l => ((l || []).find(x => x.current) || {}).time || 0;
         return Math.max(cur(g.system), cur(g.home));
     }
+    // Fin de la dernière exécution où cette partie a réussi (historique), ou 0.
+    function lastSuccess(id) {
+        let t = 0;
+        for (const h of backend.history)
+            if ((h.parts || []).some(p => p.id === id && p.state === "success")) t = Math.max(t, h.finished || 0);
+        return t;
+    }
     function compareUrl(input) {
         if (input.to.type !== "github" || !input.from || !input.from.rev || !input.to.rev) return "";
         return "https://github.com/" + input.to.owner + "/" + input.to.repo + "/compare/"
@@ -383,6 +390,7 @@ ScrollView {
             readonly property var online: page.upstream.inputs || []
             readonly property bool hasOnline: online.length > 0
             title: "Mise à jour du flake"
+            subtitle: page.lastSuccess("flake") ? "adoptée " + window.when(page.lastSuccess("flake")) : ""
             bodyVisible: hasOnline || !page.upstream.checked || window.running
             badge: hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
@@ -436,6 +444,7 @@ ScrollView {
             readonly property bool busy: backend.flatpakRun.active === true
                 || (window.running && (backend.run.parts || []).some(p => p.id === "flatpak" && (p.state === "running" || p.state === "pending")))
             title: "Flatpaks"
+            subtitle: page.lastSuccess("flatpak") ? "mis à jour " + window.when(page.lastSuccess("flatpak")) : ""
             bodyVisible: (page.pending.flatpaks || []).length > 0
             badge: (page.pending.flatpaks || []).length > 0 ? "●" : "✓"
             badgeColor: (page.pending.flatpaks || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
