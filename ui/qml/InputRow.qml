@@ -38,7 +38,7 @@ RowLayout {
         }
         MenuItem {
             // Comparaison entre les deux révisions (GitHub pour l'instant).
-            text: "Voir les changements"
+            text: "Voir les changements ↗"  // ↗ : ouvre le navigateur
             enabled: row.url.length > 0
             onTriggered: Qt.openUrlExternally(row.url)
         }
