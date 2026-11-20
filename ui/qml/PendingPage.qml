@@ -129,6 +129,7 @@ ScrollView {
                         text: window.running || backend.prebuildActive ? backend.summary
                             : ({ system: "Vérification de la configuration système…",
                                  home: "Vérification de la configuration utilisateur…",
+                                 config: "Vérification de la configuration…",
                                  flake: "Recherche des mises à jour des entrées du flake…",
                                  flatpak: "Recherche des mises à jour Flatpak…" }[backend.pendingPart]
                                || "Recherche de toutes les mises à jour…")
@@ -259,9 +260,6 @@ ScrollView {
             readonly property var sys: page.apply.system || {}
             readonly property var home: page.apply.home || {}
             readonly property var fl: page.apply.flake || {}
-            readonly property var parts: [
-                { key: "system", label: "Système (NixOS)", st: sys },
-                { key: "home", label: "Utilisateur (Home Manager)", st: home } ]
             readonly property bool anyChanged: sys.changed === true || home.changed === true
             readonly property bool allInstalled: sys.changed === false && home.changed === false
             // Portée d'un élément : présent dans la liste de quelles parties.
@@ -299,6 +297,14 @@ ScrollView {
                 .concat(home.changed === true ? (home.packages || []).map(p => Object.assign({ scope: "utilisateur" }, p)) : [])
 
             title: "Configuration"
+            // État de chaque partie, en petit à droite du titre.
+            function partState(st) {
+                return st.changed === true ? (st.built ? "à appliquer (préparé)" : "à appliquer")
+                     : st.changed === false ? "à jour" : "inconnu";
+            }
+            // Les deux dans le même état : une seule mention.
+            subtitle: partState(sys) === partState(home) ? partState(sys)
+                    : "système " + partState(sys) + " · utilisateur " + partState(home)
             badge: anyChanged ? "●" : allInstalled ? "✓" : "?"
             badgeColor: anyChanged ? Kirigami.Theme.neutralTextColor
                       : allInstalled ? Kirigami.Theme.positiveTextColor
@@ -385,58 +391,28 @@ ScrollView {
                 text: "… et " + (confCard.packages.length - 8) + (confCard.packages.length - 8 > 1 ? " autres" : " autre")
             }
 
-            // Une ligne par partie : état, vérification, application.
-            Kirigami.Separator {
-                Layout.fillWidth: true
-                Layout.topMargin: Kirigami.Units.smallSpacing
-                visible: confCard.uncommitted.length + confCard.unpushed.length + confCard.commits.length
-                         + confCard.lockInputs.length + confCard.packages.length > 0
-            }
-            Repeater {
-                model: confCard.parts
-                ColumnLayout {
-                    id: partRow
-                    required property var modelData
-                    readonly property var st: modelData.st
-                    Layout.fillWidth: true
-                    spacing: 0
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label {
-                            text: partRow.st.changed === true ? "●" : partRow.st.changed === false ? "✓" : "?"
-                            font.bold: true
-                            color: partRow.st.changed === true ? Kirigami.Theme.neutralTextColor
-                                 : partRow.st.changed === false ? Kirigami.Theme.positiveTextColor
-                                 : Kirigami.Theme.negativeTextColor
-                        }
-                        Label { text: partRow.modelData.label }
-                        Label {
-                            Layout.fillWidth: true
-                            opacity: 0.7
-                            elide: Text.ElideRight
-                            text: partRow.st.changed === true ? (partRow.st.built ? "à appliquer, déjà préparé" : "à appliquer")
-                                : partRow.st.changed === false ? "à jour" : "état inconnu"
-                        }
-                        IconAction {
-                            iconName: "view-refresh-symbolic"
-                            visible: !window.running
-                            enabled: !backend.pendingBusy
-                            tooltip: "Vérifier cette partie seulement : évaluation (environ 10 s), comparée à la génération installée. nixos-update-center-engine pending --only " + partRow.modelData.key
-                            onClicked: backend.refreshPart(partRow.modelData.key)
-                        }
-                        Button {
-                            icon.name: "media-playback-start-symbolic"
-                            text: "Appliquer"
-                            visible: partRow.st.changed !== false && !window.running
-                            onClicked: backend.startUpdate([partRow.modelData.key === "system" ? "--system" : "--home"])
-                            ToolTip.visible: hovered
-                            ToolTip.delay: 500
-                            ToolTip.text: (partRow.modelData.key === "system" ? "update --system : évaluation, construction de niri patché, nix build du système, sudo nixos-update-center-root switch-to (switch-to-configuration switch), commit de flake.lock s'il a changé, push des commits, nh clean. Sautée si la génération évaluée est déjà installée." : "update --home : Claude Desktop, modèle Voxtype, évaluation, nix build de Home Manager, home-manager switch, commit de flake.lock s'il a changé, push des commits, nh clean. Sautée si la génération évaluée est déjà installée.")
-                        }
-                    }
-                    RunProgress { partId: partRow.modelData.key }
+            // Avancement de la partie en cours pendant une application.
+            RunProgress { partId: "system" }
+            RunProgress { partId: "home" }
+
+            actions: [
+                IconAction {
+                    iconName: "view-refresh-symbolic"
+                    visible: !window.running
+                    enabled: !backend.pendingBusy
+                    tooltip: "Vérifier la configuration : évaluation du système et de Home Manager (environ 20 s), comparées aux générations installées. nixos-update-center-engine pending --only config"
+                    onClicked: backend.refreshPart("config")
+                },
+                Button {
+                    icon.name: "media-playback-start-symbolic"
+                    text: "Appliquer"
+                    visible: !confCard.allInstalled && !window.running
+                    onClicked: backend.startUpdate(["--system", "--home"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --system --home : système (évaluation, niri patché, nix build, sudo nixos-update-center-root switch-to) puis Home Manager (Claude Desktop, modèle Voxtype, nix build, home-manager switch) ; une partie déjà à jour est sautée. Ensuite commit de flake.lock s'il a changé, push des commits, nh clean."
                 }
-            }
+            ]
         }
 
         // ── Mise à jour du flake : nouvelles versions en ligne, à adopter

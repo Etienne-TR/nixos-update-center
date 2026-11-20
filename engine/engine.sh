@@ -914,7 +914,7 @@ flatpak_updates() {
 pending_quick=""
 cmd_pending() {
   # Ce qui est vérifié : tout (défaut), rien d'autre que git (--quick), ou
-  # une seule partie (--only system|home|flake|flatpak) ; le reste est
+  # une seule partie (--only system|home|config|flake|flatpak ; config : les deux premières) ; le reste est
   # repris de la dernière vérification.
   local do_sys=1 do_home=1 do_flake=1 do_flatpak=1 do_claude=1
   case "${1:-}" in
@@ -924,9 +924,10 @@ cmd_pending() {
       case "${2:-}" in
         system) do_sys=1 ;;
         home) do_home=1 do_claude=1 ;;
+        config) do_sys=1 do_home=1 do_claude=1 ;;
         flake) do_flake=1 ;;
         flatpak) do_flatpak=1 ;;
-        *) die "partie inconnue : ${2:-} (system, home, flake, flatpak)" ;;
+        *) die "partie inconnue : ${2:-} (system, home, config, flake, flatpak)" ;;
       esac
       ;;
   esac
