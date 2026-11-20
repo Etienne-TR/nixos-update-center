@@ -178,7 +178,17 @@ ScrollView {
                     wrapMode: Text.WordWrap
                     text: {
                         const r = page.result;
-                        if (prepCard.prep === "none") return "Rien à préparer : la configuration installée est à jour.";
+                        if (prepCard.prep === "none") {
+                            // Dates : dernière préparation, dernière mise à
+                            // jour Nix réussie (au moins une partie).
+                            const run = backend.run;
+                            const installed = !run.active && (run.parts || []).some(p => (p.id === "system" || p.id === "home") && p.state === "success")
+                                ? run.finished : 0;
+                            const dates = [r.time ? "préparée " + window.when(r.time) : "",
+                                           installed ? "installée " + window.when(installed) : ""].filter(x => x);
+                            return "Rien à préparer : la configuration installée est à jour"
+                                + (dates.length ? " (" + dates.join(", ") + ")." : ".");
+                        }
                         if (prepCard.prep === "ready") return "Prête : Appliquer n'aura qu'à activer.";
                         if (prepCard.prep === "stale") {
                             if (!r.state) return "Pas encore préparée : Appliquer construira tout.";
