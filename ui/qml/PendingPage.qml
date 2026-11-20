@@ -275,7 +275,7 @@ ScrollView {
                            : st.includes("D") ? "supprimé, non committé" : "non committé";
                 return { text: path, scope: what + (allInstalled ? ", appliqué" : "") };
             }).concat(unpushed.filter(c => !commits.some(k => k.hash === c.hash))
-                       .map(c => ({ text: c.hash + "  " + c.subject, scope: "non publié" })))
+                       .map(c => ({ text: c.subject, scope: "committé, non publié" })))
             // Commits à installer : réunis par hash, avec leur portée.
             readonly property var commits: {
                 const out = [], idx = {};
@@ -291,7 +291,7 @@ ScrollView {
                 const unpub = h => unpushed.some(u => u.hash === h);
                 return out.map(c => ({ hash: c.hash, subject: c.subject,
                     scope: [c.flake ? "flake.nix" : "", confCard.scope(c.sys, c.home),
-                            unpub(c.hash) ? "non publié" : ""].filter(x => x).join(", ") }));
+                            unpub(c.hash) ? "committé, non publié" : ""].filter(x => x).join(", ") }));
             }
             readonly property var lockInputs: {
                 const seen = {}, out = [];
@@ -338,7 +338,7 @@ ScrollView {
             }
             Repeater {
                 model: confCard.commits
-                ListLine { required property var modelData; text: modelData.hash + "  " + modelData.subject; scope: modelData.scope }
+                ListLine { required property var modelData; text: modelData.subject; scope: modelData.scope }
             }
             Heading {
                 visible: confCard.lockInputs.length > 0
