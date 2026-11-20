@@ -93,33 +93,6 @@ ScrollView {
         width: page.availableWidth
         spacing: Kirigami.Units.largeSpacing
 
-        RowLayout {
-            Layout.fillWidth: true
-            Label {
-                Layout.fillWidth: true
-                opacity: 0.7
-                text: page.pending.time ? "Dernière recherche " + window.when(page.pending.time) : "Pas encore de recherche"
-                // Détail au survol : la config (git) est revérifiée plus souvent.
-                HoverHandler { id: timeHover }
-                ToolTip.visible: timeHover.hovered && !!page.pending.quickTime
-                ToolTip.text: "Recherche complète " + window.when(page.pending.time)
-                              + "\nConfig (git) vérifiée " + window.when(page.pending.quickTime)
-            }
-            BusyIndicator {
-                visible: backend.pendingBusy
-                running: visible
-                implicitHeight: Kirigami.Units.iconSizes.medium
-                implicitWidth: implicitHeight
-            }
-            // Même flèche que dans les sections, ici pour tout vérifier.
-            IconAction {
-                iconName: "view-refresh-symbolic"
-                enabled: !backend.pendingBusy
-                tooltip: "Tout vérifier (30 à 60 s) : évaluation du système et de Home Manager, nouvelles versions des entrées (sans toucher flake.lock), Flatpaks. Rien n'est modifié. La config (git) est aussi vérifiée à l'ouverture et toutes les 5 minutes."
-                onClicked: backend.refreshPending()
-            }
-        }
-
         Card {
             id: prepCard
             title: "Préparation en arrière-plan"

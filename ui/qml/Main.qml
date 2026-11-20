@@ -134,6 +134,16 @@ ApplicationWindow {
                     if (currentIndex === 3) backend.refreshRoutine();
                 }
             }
+            // Tout vérifier, à droite des onglets (chaque carte a aussi le
+            // sien) ; la recherche en cours s'affiche dans le bandeau du bas.
+            IconAction {
+                visible: tabs.currentIndex === 0
+                iconName: "view-refresh-symbolic"
+                enabled: !backend.pendingBusy
+                tooltip: "Tout vérifier (30 à 60 s) : configuration Nix, nouvelles versions en ligne, Flatpaks. Rien n'est modifié."
+                    + (backend.pending.time ? "\nDernière recherche complète " + window.when(backend.pending.time) : "")
+                onClicked: backend.refreshPending()
+            }
             Button {
                 visible: window.running
                 icon.name: "process-stop"
