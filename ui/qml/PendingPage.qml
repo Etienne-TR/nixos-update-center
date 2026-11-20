@@ -267,13 +267,14 @@ ScrollView {
                 return inSys && inHome ? "système et utilisateur" : inSys ? "système" : inHome ? "utilisateur" : "";
             }
             readonly property var unpushed: page.pending.unpushed || []
-            readonly property var uncommitted: (page.pending.uncommitted || []).map(f => {
-                const path = f.slice(3);
-                const has = l => (l || []).some(d => d.trim().slice(2).trim() === path);
-                const sc = path === "flake.nix" || path === "flake.lock" ? "flake"
-                         : confCard.scope(has(sys.dirty), has(home.dirty));
-                return { text: f.trim(), scope: sc };
-            })
+            // État du dépôt git, une ligne par élément : fichier non committé
+            // (« nouveau », « supprimé » selon git status) ou commit non publié.
+            readonly property var repoLines: (page.pending.uncommitted || []).map(f => {
+                const st = f.slice(0, 2), path = f.slice(3);
+                const what = st === "??" || st.includes("A") ? "nouveau, non committé"
+                           : st.includes("D") ? "supprimé, non committé" : "non committé";
+                return { text: path, scope: what + (allInstalled ? ", appliqué" : "") };
+            }).concat(unpushed.map(c => ({ text: c.hash + "  " + c.subject, scope: "non publié" })))
             // Commits à installer : réunis par hash, avec leur portée.
             readonly property var commits: {
                 const out = [], idx = {};
@@ -320,26 +321,17 @@ ScrollView {
                 text: (page.pending.errors || []).join("\n")
             }
 
-            // État du dépôt : ce qui n'est pas encore committé ou envoyé.
             Heading {
-                visible: confCard.uncommitted.length > 0
+                visible: confCard.repoLines.length > 0
                 Layout.topMargin: 0
-                text: (confCard.uncommitted.length > 1 ? "Fichiers non committés" : "Fichier non committé") + (confCard.allInstalled ? " (déjà appliqué" + (confCard.uncommitted.length > 1 ? "s" : "") + ")" : "")
+                text: "État du dépôt git"
+                HoverHandler { id: repoHover }
+                ToolTip.visible: repoHover.hovered
+                ToolTip.text: "Fichiers non committés (le centre ne committe que flake.lock, après une application réussie) et commits locaux pas encore sur GitHub (publiés par git push après une application réussie)."
             }
             Repeater {
-                model: confCard.uncommitted
+                model: confCard.repoLines
                 ListLine { required property var modelData; text: modelData.text; scope: modelData.scope }
-            }
-            Heading {
-                visible: confCard.unpushed.length > 0
-                text: confCard.unpushed.length > 1 ? "Commits non publiés" : "Commit non publié"
-                HoverHandler { id: unpushedHover }
-                ToolTip.visible: unpushedHover.hovered
-                ToolTip.text: "Commits locaux pas encore sur GitHub : envoyés par git push après une application réussie."
-            }
-            Repeater {
-                model: confCard.unpushed
-                ListLine { required property var modelData; text: modelData.hash + "  " + modelData.subject }
             }
 
             // À installer.
