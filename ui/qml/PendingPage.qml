@@ -294,7 +294,8 @@ ScrollView {
                     .filter(x => x).join(" et ")
                 IconAction {
                     visible: confCard.packages.length > 0
-                    iconName: "view-visible"
+                    iconName: "view-reveal-symbolic"
+                    fallbackName: "view-visible"
                     tooltip: "Voir les paquets"
                     onClicked: packagesDialog.open()
                 }

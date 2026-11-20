@@ -7,6 +7,8 @@ import org.kde.kirigami as Kirigami
 Item {
     id: root
     property string iconName
+    // Icône de repli si le thème n'a pas la première (Breeze / Adwaita).
+    property string fallbackName
     property string tooltip
     signal clicked()
     implicitWidth: Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing
@@ -17,6 +19,7 @@ Item {
         width: Kirigami.Units.iconSizes.small
         height: width
         source: root.iconName
+        fallback: root.fallbackName.length > 0 ? root.fallbackName : "unknown"
         isMask: true
         color: !root.enabled ? Kirigami.Theme.disabledTextColor
              : mouse.containsMouse ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
