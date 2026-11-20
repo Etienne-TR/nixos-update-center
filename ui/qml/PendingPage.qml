@@ -56,12 +56,11 @@ ScrollView {
     }
 
     // Titre de liste et ligne d'élément de la carte Configuration.
-    // Titre de niveau 2 : un peu en retrait (demi-gras, plus clair), avec de
+    // Titre de niveau 2 : demi-gras (moins fort que le gras), avec de
     // l'espace au-dessus.
     component Heading: Label {
         Layout.topMargin: Kirigami.Units.largeSpacing
         font.weight: Font.DemiBold
-        opacity: 0.9
     }
     component ListLine: RowLayout {
         property string text
