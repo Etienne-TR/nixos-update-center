@@ -38,10 +38,26 @@ RowLayout {
         }
         MenuItem {
             // Comparaison entre les deux révisions (GitHub pour l'instant).
-            // Globe symbolique : ouvre le navigateur (web-browser-symbolic
-            // existe dans Pop/Adwaita, pas internet-web-browser-symbolic).
+            // Globe en fin de ligne (ouvre le navigateur) : pas de marge
+            // d'icône devant les autres actions du menu.
+            id: changesItem
             text: "Voir les changements"
-            icon.name: "web-browser-symbolic"
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.largeSpacing
+                Label {
+                    Layout.fillWidth: true
+                    text: changesItem.text
+                    color: changesItem.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                    opacity: changesItem.enabled ? 1 : 0.5
+                }
+                Kirigami.Icon {
+                    source: "web-browser-symbolic"
+                    implicitWidth: Kirigami.Units.iconSizes.small
+                    implicitHeight: implicitWidth
+                    isMask: true
+                    color: changesItem.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                }
+            }
             enabled: row.url.length > 0
             onTriggered: Qt.openUrlExternally(row.url)
         }
