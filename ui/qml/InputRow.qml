@@ -18,8 +18,13 @@ RowLayout {
 
     // Ligne cliquable : un lien, ou le menu d'une entrée en ligne.
     readonly property bool clickable: row.url.length > 0 || (row.updatable && !window.running)
-    function activate() {
-        if (row.updatable) menu.popup(arrow, 0, arrow.height);
+    // x : abscisse du clic dans la ligne (le menu s'ouvre sous le curseur),
+    // sinon sous le ▾.
+    function activate(x) {
+        if (row.updatable) {
+            if (x === undefined) menu.popup(arrow, 0, arrow.height);
+            else menu.popup(row, x, row.height);
+        }
         else if (row.url.length > 0) Qt.openUrlExternally(row.url);
     }
     HoverHandler {
@@ -28,7 +33,7 @@ RowLayout {
     }
     TapHandler {
         enabled: row.clickable
-        onTapped: row.activate()
+        onTapped: (point) => row.activate(point.position.x)
     }
     Menu {
         id: menu
