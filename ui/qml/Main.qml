@@ -135,15 +135,6 @@ ApplicationWindow {
                 }
             }
             Button {
-                visible: !window.running
-                highlighted: true
-                icon.name: "media-playback-start-symbolic"
-                text: "Tout appliquer"
-                ToolTip.visible: hovered
-                ToolTip.text: "update --system --home --flatpak : système, Home Manager et Flatpaks, sans toucher au flake. Une partie dont la génération évaluée est déjà installée est sautée ; push des commits, nh clean après un vrai switch."
-                onClicked: backend.startUpdate(["--system", "--home", "--flatpak"])
-            }
-            Button {
                 visible: window.running
                 icon.name: "process-stop"
                 text: "Arrêter"
