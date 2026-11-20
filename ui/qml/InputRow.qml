@@ -5,7 +5,7 @@ import org.kde.kirigami as Kirigami
 
 // Une entrée du flake : nom, versions ou dates (tronquées si trop longues,
 // texte complet au survol). Toute la ligne est cliquable : entrée adoptée,
-// changements sur GitHub (« i ») ; entrée en ligne, menu (▾) avec Adopter et
+// changements sur GitHub (« i ») ; entrée en ligne, menu (▶) avec Adopter et
 // les changements.
 RowLayout {
     id: row
@@ -19,7 +19,7 @@ RowLayout {
     // Ligne cliquable : un lien, ou le menu d'une entrée en ligne.
     readonly property bool clickable: row.url.length > 0 || (row.updatable && !window.running)
     // x : abscisse du clic dans la ligne (le menu s'ouvre sous le curseur),
-    // sinon sous le ▾.
+    // sinon sous le ▶.
     function activate(x) {
         if (row.updatable) {
             if (x === undefined) menu.popup(arrow, 0, arrow.height);
@@ -71,7 +71,8 @@ RowLayout {
     }
     IconAction {
         id: arrow
-        iconName: row.updatable ? "pan-down-symbolic" : "help-about-symbolic"
+        // ▶ comme les autres actions (le menu propose Adopter en premier).
+        iconName: row.updatable ? "media-playback-start-symbolic" : "help-about-symbolic"
         // Au survol de la ligne seulement (place gardée), en couleur d'accent.
         opacity: row.clickable && hover.hovered ? 1 : 0
         enabled: row.clickable
