@@ -786,8 +786,8 @@ lock_diff() { # ancien, nouveau
       echo "$v"
       return 0
     fi
-    # Vérification rapide : seulement ce qui est déjà en cache.
-    [ -z "${pending_quick:-}" ] || return 0
+    # Calculée une fois par commit (même en vérification rapide : seulement
+    # après une adoption), puis en cache, même vide.
     v=$(timeout 120 nix eval --raw "$r#packages.$sys.default.version" 2>/dev/null || true)
     # Sans paquet principal (nixpkgs) : version de la distribution, par
     # exemple 26.11.20261116.1c872b8.
@@ -803,13 +803,20 @@ lock_diff() { # ancien, nouveau
     commits=null
     if [ "$type" = github ] && [ "$from" != - ] && [ "$to" != - ]; then
       local key="c:$owner/$repo/$from...$to"
-      if ! commits=$(jq -e --arg k "$key" '.[$k]' "$cache" 2>/dev/null) && [ -n "${pending_quick:-}" ]; then
+      # Échec (réseau, limite de GitHub) : pas de nouvel essai avant 1 h.
+      local tried
+      tried=$(jq -r --arg k "t:$key" '.[$k] // 0' "$cache" 2>/dev/null || echo 0)
+      if ! commits=$(jq -e --arg k "$key" '.[$k]' "$cache" 2>/dev/null) && [ $(($(now) - tried)) -lt 3600 ]; then
         commits=null
       elif [ "$commits" = "" ] || [ "$commits" = null ]; then
         commits=$(curl -fsS --max-time 10 "https://api.github.com/repos/$owner/$repo/compare/$from...$to" 2>/dev/null |
           jq '.ahead_by // null' 2>/dev/null || echo null)
         [ -n "$commits" ] || commits=null
-        [ "$commits" = null ] || jq --arg k "$key" --argjson c "$commits" '.[$k] = $c' "$cache" | write_json "$cache"
+        if [ "$commits" = null ]; then
+          jq --arg k "t:$key" --argjson t "$(now)" '.[$k] = $t' "$cache" | write_json "$cache"
+        else
+          jq --arg k "$key" --argjson c "$commits" '.[$k] = $c' "$cache" | write_json "$cache"
+        fi
       fi
     fi
     json=$(jq --argjson i "$i" --arg fv "$fv" --arg tv "$tv" --argjson c "$commits" \

@@ -28,8 +28,12 @@ ScrollView {
         };
         if (!input.from) return "nouvelle entrée" + (input.toVersion ? " · " + input.toVersion : "");
         const parts = [];
-        if (input.fromVersion && input.toVersion)
+        // Version si elle est connue : « a → b », ou une seule si elle ne
+        // change pas (ou si l'autre est inconnue).
+        if (input.fromVersion && input.toVersion && input.fromVersion !== input.toVersion)
             parts.push(input.fromVersion + " → " + input.toVersion);
+        else if (input.toVersion || input.fromVersion)
+            parts.push(input.toVersion || input.fromVersion);
         // « 936 commits (1 jour) » : nombre de commits, puis le retard.
         const l = lag(input.from.date, input.to.date);
         const c = input.commits ? input.commits + " commit" + (input.commits > 1 ? "s" : "") : "";
