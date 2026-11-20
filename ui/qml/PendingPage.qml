@@ -133,7 +133,7 @@ ScrollView {
             // bandeau du bas.
             bodyVisible: !backend.prebuildActive
             subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale")
-                    : page.result.time && prep !== "none" ? window.when(page.result.time) : ""
+                    : page.result.time ? "préparée " + window.when(page.result.time) : ""
             actions: [
             Button {
                 visible: backend.prebuildActive
@@ -184,15 +184,7 @@ ScrollView {
                     wrapMode: Text.WordWrap
                     text: {
                         const r = page.result;
-                        if (prepCard.prep === "none") {
-                            // Dates : dernière préparation, dernière mise à
-                            // jour Nix réussie (au moins une partie).
-                            const installed = page.lastInstalled();
-                            const dates = [r.time ? "préparée " + window.when(r.time) : "",
-                                           installed ? "installée " + window.when(installed) : ""].filter(x => x);
-                            return "Rien à préparer : la configuration installée est à jour"
-                                + (dates.length ? " (" + dates.join(", ") + ")." : ".");
-                        }
+                        if (prepCard.prep === "none") return "Rien à préparer.";
                         if (prepCard.prep === "ready") return "Prête : Appliquer n'aura qu'à activer.";
                         if (prepCard.prep === "stale") {
                             if (!r.state) return "Pas encore préparée : Appliquer construira tout.";
@@ -238,6 +230,7 @@ ScrollView {
                 .concat(home.changed === true ? (home.packages || []).map(p => Object.assign({ scope: "utilisateur" }, p)) : [])
 
             title: "Configuration Nix"
+            subtitle: page.lastInstalled() ? "installée " + window.when(page.lastInstalled()) : ""
             // Rien à montrer (tout installé, dépôt propre) : titre seul.
             bodyVisible: files.length + unpushed.length + lockInputs.length + packages.length > 0
                 || sys.changed === null || home.changed === null || allInstalled
@@ -250,7 +243,7 @@ ScrollView {
                 visible: confCard.allInstalled
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: "Installée et à jour" + (page.lastInstalled() ? " (mise à jour " + window.when(page.lastInstalled()) + ")." : ".")
+                text: "Rien à appliquer."
             }
             // Évaluation en échec : la dernière erreur de Nix, une fois même
             // si système et Home Manager donnent la même.
