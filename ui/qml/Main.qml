@@ -124,7 +124,7 @@ ApplicationWindow {
                 id: tabs
                 Layout.fillWidth: true
                 TabButton {
-                    text: backend.pendingCount > 0 ? "En attente (" + backend.pendingCount + ")" : "En attente"
+                    text: backend.pendingCount > 0 ? "En attente ●" : "En attente"
                 }
                 TabButton { text: window.running ? "En cours ●" : "En cours" }
                 TabButton { text: "Historique" }

@@ -217,8 +217,11 @@ void Backend::readPending() {
 int Backend::pendingCount() const {
   const QVariantMap apply = m_pending.value("apply").toMap();
   int n = 0;
-  if (apply.value("system").toMap().value("changed").toBool()) ++n;
-  if (apply.value("home").toMap().value("changed").toBool()) ++n;
+  const QVariantMap sys = apply.value("system").toMap(), home = apply.value("home").toMap();
+  if (sys.value("changed").toBool()) ++n;
+  if (home.value("changed").toBool()) ++n;
+  // Entrées adoptées sans effet sur l'installation : flake.lock à enregistrer.
+  if (n == 0 && (!sys.value("inputs").toList().isEmpty() || !home.value("inputs").toList().isEmpty())) ++n;
   n += m_pending.value("upstream").toMap().value("inputs").toList().size();
   n += m_pending.value("flatpaks").toList().size();
   if (m_pending.value("claudeDesktop").toMap().value("available").toBool()) ++n;
