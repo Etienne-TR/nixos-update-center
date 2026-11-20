@@ -298,14 +298,6 @@ ScrollView {
                 .concat(home.changed === true ? (home.packages || []).map(p => Object.assign({ scope: "utilisateur" }, p)) : [])
 
             title: "Configuration"
-            // État de chaque partie, en petit à droite du titre.
-            function partState(st) {
-                return st.changed === true ? (st.built ? "à appliquer (préparé)" : "à appliquer")
-                     : st.changed === false ? "à jour" : "inconnu";
-            }
-            // Les deux dans le même état : une seule mention.
-            subtitle: partState(sys) === partState(home) ? partState(sys)
-                    : "système " + partState(sys) + " · utilisateur " + partState(home)
             badge: anyChanged ? "●" : allInstalled ? "✓" : "?"
             badgeColor: anyChanged ? Kirigami.Theme.neutralTextColor
                       : allInstalled ? Kirigami.Theme.positiveTextColor
@@ -395,14 +387,33 @@ ScrollView {
                     tooltip: "Vérifier la configuration : évaluation du système et de Home Manager (environ 20 s), comparées aux générations installées. nixos-update-center-engine pending --only config"
                     onClicked: backend.refreshPart("config")
                 },
+                // Une partie seule, quand les deux sont à appliquer ; sinon
+                // « Appliquer » suffit (une partie à jour est sautée).
+                Button {
+                    text: "Système"
+                    visible: confCard.sys.changed !== false && confCard.home.changed !== false && !window.running
+                    onClicked: backend.startUpdate(["--system"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --system : évaluation, niri patché, nix build du système, sudo nixos-update-center-root switch-to (switch-to-configuration switch), puis commit de flake.lock s'il a changé, push, nh clean."
+                },
+                Button {
+                    text: "Utilisateur"
+                    visible: confCard.sys.changed !== false && confCard.home.changed !== false && !window.running
+                    onClicked: backend.startUpdate(["--home"])
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "update --home : Claude Desktop, modèle Voxtype, nix build de Home Manager, home-manager switch, puis commit de flake.lock s'il a changé, push, nh clean."
+                },
                 Button {
                     icon.name: "media-playback-start-symbolic"
-                    text: "Appliquer"
+                    text: confCard.sys.changed !== false && confCard.home.changed !== false ? "Tout"
+                        : confCard.sys.changed !== false ? "Appliquer (système)" : "Appliquer (utilisateur)"
                     visible: !confCard.allInstalled && !window.running
                     onClicked: backend.startUpdate(["--system", "--home"])
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "update --system --home : système (évaluation, niri patché, nix build, sudo nixos-update-center-root switch-to) puis Home Manager (Claude Desktop, modèle Voxtype, nix build, home-manager switch) ; une partie déjà à jour est sautée. Ensuite commit de flake.lock s'il a changé, push des commits, nh clean."
+                    ToolTip.text: "update --system --home : système puis Home Manager ; une partie déjà à jour est sautée. Ensuite commit de flake.lock s'il a changé, push des commits, nh clean."
                 }
             ]
         }
