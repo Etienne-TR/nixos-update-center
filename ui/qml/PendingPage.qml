@@ -314,7 +314,7 @@ ScrollView {
             Heading {
                 visible: confCard.uncommitted.length > 0
                 Layout.topMargin: 0
-                text: "Non committé" + (confCard.allInstalled ? " (déjà appliqué)" : "")
+                text: (confCard.uncommitted.length > 1 ? "Fichiers non committés" : "Fichier non committé") + (confCard.allInstalled ? " (déjà appliqué" + (confCard.uncommitted.length > 1 ? "s" : "") + ")" : "")
             }
             Repeater {
                 model: confCard.uncommitted
@@ -322,7 +322,7 @@ ScrollView {
             }
             Heading {
                 visible: confCard.unpushed.length > 0
-                text: "Commits non publiés"
+                text: confCard.unpushed.length > 1 ? "Commits non publiés" : "Commit non publié"
                 HoverHandler { id: unpushedHover }
                 ToolTip.visible: unpushedHover.hovered
                 ToolTip.text: "Commits locaux pas encore sur GitHub : envoyés par git push après une application réussie."
@@ -335,7 +335,7 @@ ScrollView {
             // À installer.
             Heading {
                 visible: confCard.commits.length > 0
-                text: "Commits à installer"
+                text: confCard.commits.length > 1 ? "Commits à installer" : "Commit à installer"
             }
             Repeater {
                 model: confCard.commits
@@ -343,7 +343,7 @@ ScrollView {
             }
             Heading {
                 visible: confCard.lockInputs.length > 0
-                text: "Entrées du flake adoptées, à installer"
+                text: confCard.lockInputs.length > 1 ? "Entrées du flake adoptées, à installer" : "Entrée du flake adoptée, à installer"
             }
             Repeater {
                 model: confCard.lockInputs
@@ -356,7 +356,7 @@ ScrollView {
             }
             Heading {
                 visible: confCard.packages.length > 0
-                text: "Paquets qui changent"
+                text: confCard.packages.length > 1 ? "Paquets qui changent" : "Paquet qui change"
             }
             Repeater {
                 model: confCard.packages.slice(0, 8)
@@ -378,7 +378,7 @@ ScrollView {
             Label {
                 visible: confCard.packages.length > 8
                 opacity: 0.7
-                text: "… et " + (confCard.packages.length - 8) + " autre(s)"
+                text: "… et " + (confCard.packages.length - 8) + (confCard.packages.length - 8 > 1 ? " autres" : " autre")
             }
 
             // Une ligne par partie : état, vérification, application.
@@ -453,7 +453,7 @@ ScrollView {
                 Layout.fillWidth: true
                 Label {
                     Layout.fillWidth: true
-                    text: page.upstream.checked ? "Disponibles en ligne" : "En ligne : pas encore recherché (ou réseau indisponible)"
+                    text: page.upstream.checked ? (flakeCard.online.length > 1 ? "Disponibles en ligne" : "Disponible en ligne") : "En ligne : pas encore recherché (ou réseau indisponible)"
                     font.bold: page.upstream.checked
                     opacity: page.upstream.checked ? 1 : 0.7
                 }

@@ -598,7 +598,11 @@ cmd_run() {
     sudo "$root_helper" clean || echo "Nettoyage en échec."
   fi
 
-  [ "$news_count" -eq 0 ] || notes+=("$news_count nouveauté(s) Home Manager : @command@ --news")
+  if [ "$news_count" -eq 1 ]; then
+    notes+=("1 nouveauté Home Manager : @command@ --news")
+  elif [ "$news_count" -gt 1 ]; then
+    notes+=("$news_count nouveautés Home Manager : @command@ --news")
+  fi
   for id in "${patched_ko[@]}"; do notes+=("⚠ patch désactivé ($id)"); done
   [ -z "$push_note" ] || notes+=("$push_note")
 

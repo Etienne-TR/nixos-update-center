@@ -257,7 +257,7 @@ void Backend::updateSummary() {
   } else if (updateReady()) {
     summary = "Mise à jour prête à installer";
   } else if (pendingCount() > 0) {
-    summary = QString("%1 élément(s) en attente").arg(pendingCount());
+    summary = QString(pendingCount() > 1 ? "%1 éléments en attente" : "%1 élément en attente").arg(pendingCount());
   } else {
     summary = "À jour";
   }
