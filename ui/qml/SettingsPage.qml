@@ -121,7 +121,7 @@ ScrollView {
             enabled: enabledBox.checked
             CheckBox {
                 id: flakeBox
-                text: "Mettre à jour le flake (nix flake update, avec commit de flake.lock)"
+                text: "Mettre à jour le flake (nix flake update ; flake.lock committé après une application réussie)"
             }
             CheckBox {
                 id: flatpakBox

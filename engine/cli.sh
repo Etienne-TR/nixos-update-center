@@ -22,8 +22,8 @@ Usage : @command@ [--system] [--home] [--flatpak] [--all] [--flake]
   --home        Home Manager
   --flatpak     Flatpaks (flatpak update, puis retrait des runtimes inutilisés)
   --all         les trois (par défaut)
-  --flake       d'abord nix flake update, avec commit de flake.lock s'il
-                change ; seul, ne fait que ça
+  --flake       d'abord nix flake update ; flake.lock est committé après
+                une application réussie ; seul, ne fait que ça
   --flake-input NOM
                 comme --flake, pour cette seule entrée (répétable)
 

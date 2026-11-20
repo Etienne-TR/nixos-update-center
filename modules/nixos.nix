@@ -121,8 +121,8 @@ in
       type = lib.types.nullOr lib.types.str;
       default = "Wed 03:00:00";
       description = ''
-        Routine (OnCalendar de systemd) : mise à jour du flake (commit de
-        flake.lock, sans push), puis préparation en arrière-plan. null :
+        Routine (OnCalendar de systemd) : mise à jour du flake (flake.lock
+        écrit, sans commit), puis préparation en arrière-plan. null :
         pas de routine.
       '';
     };
@@ -137,7 +137,7 @@ in
     push = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Pousser les commits automatiques (flake.lock, extras) quand tous les switch ont réussi.";
+      description = "Pousser les commits (dont celui de flake.lock, fait après une application réussie) quand tous les switch ont réussi.";
     };
 
     clean = {

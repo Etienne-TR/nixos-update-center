@@ -169,14 +169,28 @@ stop_prebuild() {
 
 # Entrées à faire avancer (--flake-input) ; aucune : toutes.
 flake_inputs=()
+# flake.lock n'est pas committé ici : il l'est après une application réussie
+# (commit_lock), pour que main n'ait que des versions qui ont tourné.
 part_flake() {
-  local msg="chore(flake): mise à jour du flake.lock"
-  [ "${#flake_inputs[@]}" -eq 0 ] || msg="chore(flake): mise à jour de ${flake_inputs[*]}"
   nix flake update "${flake_inputs[@]}" || return 1
-  if ! git diff --quiet -- flake.lock; then
-    git commit -q -m "$msg" -- flake.lock || return 1
-    echo "flake.lock mis à jour et committé."
+  if git diff --quiet HEAD -- flake.lock; then
+    echo "flake.lock inchangé."
+  else
+    echo "flake.lock mis à jour (committé après une application réussie)."
   fi
+}
+
+# Commit de flake.lock seul (jamais les autres fichiers non committés), avec
+# les entrées qui ont changé depuis HEAD dans le message.
+commit_lock() {
+  git diff --quiet HEAD -- flake.lock && return 0
+  local old names
+  old=$(mktemp)
+  git show HEAD:./flake.lock >"$old" 2>/dev/null || echo '{"nodes":{"root":{"inputs":{}}}}' >"$old"
+  names=$(lock_diff_raw "$old" flake.lock | jq -r '[.[].name] | join(", ")')
+  rm -f "$old"
+  git commit -q -m "chore(flake): mise à jour de ${names:-flake.lock}" -- flake.lock || return 1
+  echo "flake.lock committé : ${names:-flake.lock}."
 }
 
 # Extra « paquet patché avec repli » : le paquet patché est construit seul
@@ -550,9 +564,13 @@ cmd_run() {
     write_run
   fi
 
-  # Push des commits automatiques seulement si tous les switch ont réussi :
-  # un flake.lock qui casse un switch n'est pas publié.
+  # flake.lock adopté : committé seulement si tous les switch ont réussi ;
+  # un flake.lock qui casse un switch n'est ni committé ni publié.
   local pending push_note=""
+  if [ -n "$switch_ok" ] && [ -z "$switch_ko" ] && ! git diff --quiet HEAD -- flake.lock; then
+    section "Commit de flake.lock"
+    commit_lock || failed=1
+  fi
   if [ -n "$system$home" ] && [ "$(cfg .push)" = true ]; then
     section "Envoi des commits"
     pending=$(git log --oneline '@{u}..' 2>/dev/null || true)
@@ -1108,7 +1126,7 @@ cmd_check() {
     notify dialog-warning-symbolic "Mise à jour du système" "Le dossier de configuration n'a pas été trouvé."
     return 1
   }
-  before=$(git rev-parse HEAD)
+  before=$(sha256sum flake.lock)
   if [ "$(cfg .routine.flakeUpdate)" != true ]; then
     echo "Mise à jour du flake désactivée dans les réglages : préparation avec le flake.lock actuel."
   elif ! "$NAME" --flake; then
@@ -1118,7 +1136,7 @@ cmd_check() {
   mkdir -p "$(dirname "$pending_file")"
   touch "$pending_file"
   systemctl start "$prebuild_unit" || echo "Lancement de la préparation en arrière-plan impossible."
-  if [ "$(git rev-parse HEAD)" = "$before" ]; then
+  if [ "$(sha256sum flake.lock)" = "$before" ]; then
     echo "flake.lock inchangé : seulement la préparation des Flatpaks."
     return 3
   fi

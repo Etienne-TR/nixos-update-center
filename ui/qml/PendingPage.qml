@@ -322,10 +322,10 @@ ScrollView {
             }
             Heading {
                 visible: confCard.unpushed.length > 0
-                text: "Pas encore envoyé sur GitHub"
+                text: "Commits non publiés"
                 HoverHandler { id: unpushedHover }
                 ToolTip.visible: unpushedHover.hovered
-                ToolTip.text: "Envoyé par git push après une application réussie (jamais un flake.lock qui casse un switch)."
+                ToolTip.text: "Commits locaux pas encore sur GitHub : envoyés par git push après une application réussie."
             }
             Repeater {
                 model: confCard.unpushed
@@ -427,7 +427,7 @@ ScrollView {
                             onClicked: backend.startUpdate([partRow.modelData.key === "system" ? "--system" : "--home"])
                             ToolTip.visible: hovered
                             ToolTip.delay: 500
-                            ToolTip.text: (partRow.modelData.key === "system" ? "update --system : évaluation, construction de niri patché, nix build du système, sudo nixos-update-center-root switch-to (switch-to-configuration switch), push des commits, nh clean. Sautée si la génération évaluée est déjà installée." : "update --home : Claude Desktop, modèle Voxtype, évaluation, nix build de Home Manager, home-manager switch, push des commits, nh clean. Sautée si la génération évaluée est déjà installée.")
+                            ToolTip.text: (partRow.modelData.key === "system" ? "update --system : évaluation, construction de niri patché, nix build du système, sudo nixos-update-center-root switch-to (switch-to-configuration switch), commit de flake.lock s'il a changé, push des commits, nh clean. Sautée si la génération évaluée est déjà installée." : "update --home : Claude Desktop, modèle Voxtype, évaluation, nix build de Home Manager, home-manager switch, commit de flake.lock s'il a changé, push des commits, nh clean. Sautée si la génération évaluée est déjà installée.")
                         }
                     }
                     RunProgress { partId: partRow.modelData.key }
@@ -465,7 +465,7 @@ ScrollView {
                     onClicked: backend.checkUpdates()
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update, avec commit), puis préparer en arrière-plan et notifier (la routine). Rien n'est installé : elles passent dans « Configuration », à installer."
+                    ToolTip.text: "Adopter les nouvelles versions : les écrire dans flake.lock (nix flake update), puis, préparer en arrière-plan et notifier (la routine). Rien n'est installé ni committé : flake.lock passe dans « Configuration », committé et publié après une application réussie."
                 }
             }
             Repeater {
