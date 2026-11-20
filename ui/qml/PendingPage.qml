@@ -49,6 +49,12 @@ ScrollView {
         const m = /^chore\(flake\): mise à jour (?:de |du )(.*)$/.exec(subject || "");
         return m ? "flake.lock : " + m[1].replace(/^flake\.lock$/, "toutes les entrées") : subject;
     }
+    // Fin de la dernière mise à jour Nix réussie (au moins une partie), ou 0.
+    function lastInstalled() {
+        const run = backend.run;
+        return !run.active && (run.parts || []).some(p => (p.id === "system" || p.id === "home") && p.state === "success")
+            ? run.finished : 0;
+    }
     function compareUrl(input) {
         if (input.to.type !== "github" || !input.from || !input.from.rev || !input.to.rev) return "";
         return "https://github.com/" + input.to.owner + "/" + input.to.repo + "/compare/"
@@ -181,9 +187,7 @@ ScrollView {
                         if (prepCard.prep === "none") {
                             // Dates : dernière préparation, dernière mise à
                             // jour Nix réussie (au moins une partie).
-                            const run = backend.run;
-                            const installed = !run.active && (run.parts || []).some(p => (p.id === "system" || p.id === "home") && p.state === "success")
-                                ? run.finished : 0;
+                            const installed = page.lastInstalled();
                             const dates = [r.time ? "préparée " + window.when(r.time) : "",
                                            installed ? "installée " + window.when(installed) : ""].filter(x => x);
                             return "Rien à préparer : la configuration installée est à jour"
@@ -236,12 +240,18 @@ ScrollView {
             title: "Configuration Nix"
             // Rien à montrer (tout installé, dépôt propre) : titre seul.
             bodyVisible: files.length + unpushed.length + lockInputs.length + packages.length > 0
-                || sys.changed === null || home.changed === null
+                || sys.changed === null || home.changed === null || allInstalled
             badge: anyChanged ? "●" : allInstalled ? "✓" : "?"
             badgeColor: anyChanged ? Kirigami.Theme.neutralTextColor
                       : allInstalled ? Kirigami.Theme.positiveTextColor
                       : Kirigami.Theme.negativeTextColor
 
+            Label {
+                visible: confCard.allInstalled
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "Installée et à jour" + (page.lastInstalled() ? " (mise à jour " + window.when(page.lastInstalled()) + ")." : ".")
+            }
             // Évaluation en échec : la dernière erreur de Nix, une fois même
             // si système et Home Manager donnent la même.
             ColumnLayout {
