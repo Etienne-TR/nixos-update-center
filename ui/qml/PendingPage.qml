@@ -60,7 +60,7 @@ ScrollView {
     // l'espace au-dessus.
     component Heading: Label {
         Layout.topMargin: Kirigami.Units.largeSpacing
-        font.weight: Font.DemiBold
+        font.weight: 650  // entre demi-gras (600) et gras (700)
     }
     component ListLine: RowLayout {
         property string text
