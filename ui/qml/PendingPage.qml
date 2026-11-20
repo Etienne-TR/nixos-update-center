@@ -61,7 +61,7 @@ ScrollView {
     component Heading: Label {
         Layout.topMargin: Kirigami.Units.largeSpacing
         font.weight: Font.DemiBold
-        opacity: 0.75
+        opacity: 0.9
     }
     component ListLine: RowLayout {
         property string text
