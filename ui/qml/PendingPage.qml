@@ -279,7 +279,7 @@ ScrollView {
                 }
             }
             // Ce que fera « Appliquer », une ligne par action ; la liste des
-            // paquets s'ouvre avec l'œil.
+            // paquets s'ouvre avec le « i ».
             Heading {
                 visible: confCard.needsApply || confCard.unpushed.length > 0
                 text: "Actions en attente"
@@ -294,8 +294,7 @@ ScrollView {
                     .filter(x => x).join(" et ")
                 IconAction {
                     visible: confCard.packages.length > 0
-                    iconName: "view-reveal-symbolic"
-                    fallbackName: "view-visible"
+                    iconName: "help-about-symbolic"
                     tooltip: "Voir les paquets"
                     onClicked: packagesDialog.open()
                 }
