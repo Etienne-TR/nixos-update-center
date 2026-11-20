@@ -56,9 +56,12 @@ ScrollView {
     }
 
     // Titre de liste et ligne d'élément de la carte Configuration.
+    // Titre de niveau 2 : un peu en retrait (demi-gras, plus clair), avec de
+    // l'espace au-dessus.
     component Heading: Label {
-        Layout.topMargin: Kirigami.Units.smallSpacing
-        font.bold: true
+        Layout.topMargin: Kirigami.Units.largeSpacing
+        font.weight: Font.DemiBold
+        opacity: 0.75
     }
     component ListLine: RowLayout {
         property string text
@@ -330,6 +333,8 @@ ScrollView {
             }
             Heading {
                 visible: confCard.unpushed.length > 0
+                // Pas d'espace au-dessus du premier titre de la carte.
+                Layout.topMargin: confCard.files.length > 0 ? Kirigami.Units.largeSpacing : 0
                 text: confCard.unpushed.length > 1 ? "Commits non publiés" : "Commit non publié"
             }
             Repeater {
@@ -340,6 +345,7 @@ ScrollView {
             // À installer.
             Heading {
                 visible: confCard.lockInputs.length > 0
+                Layout.topMargin: confCard.files.length + confCard.unpushed.length > 0 ? Kirigami.Units.largeSpacing : 0
                 text: confCard.lockInputs.length > 1 ? "Entrées du flake adoptées" : "Entrée du flake adoptée"
             }
             Repeater {
@@ -447,11 +453,11 @@ ScrollView {
             RowLayout {
                 visible: flakeCard.hasOnline || !page.upstream.checked
                 Layout.fillWidth: true
-                Label {
+                Heading {
                     Layout.fillWidth: true
+                    Layout.topMargin: 0
                     text: page.upstream.checked ? (flakeCard.online.length > 1 ? "Disponibles en ligne" : "Disponible en ligne") : "En ligne : pas encore recherché (ou réseau indisponible)"
-                    font.bold: page.upstream.checked
-                    opacity: page.upstream.checked ? 1 : 0.7
+                    font.weight: page.upstream.checked ? Font.DemiBold : Font.Normal
                 }
                 Button {
                     icon.name: "media-playback-start-symbolic"
