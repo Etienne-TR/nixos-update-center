@@ -54,8 +54,23 @@ case "${1:-}" in
     touch "/run/$NAME/boosted"
     echo "Préparation à pleine vitesse."
     ;;
+  pause | resume)
+    # Pause de la construction : gel de son unité (cgroup), compilations
+    # comprises (elles tournent dans l'unité, store local, sans le démon).
+    /run/current-system/sw/bin/systemctl is-active --quiet "$NAME-prebuild.service" ||
+      { echo "aucune préparation en cours" >&2 && exit 1; }
+    if [ "$1" = pause ]; then
+      /run/current-system/sw/bin/systemctl freeze "$NAME-prebuild.service"
+      touch "/run/$NAME/paused"
+      echo "Construction en pause."
+    else
+      /run/current-system/sw/bin/systemctl thaw "$NAME-prebuild.service"
+      rm -f "/run/$NAME/paused"
+      echo "Construction reprise."
+    fi
+    ;;
   *)
-    echo "usage : $NAME-root switch-to CHEMIN | switch-generation N | clean | boost" >&2
+    echo "usage : $NAME-root switch-to CHEMIN | switch-generation N | clean | boost | pause | resume" >&2
     exit 2
     ;;
 esac

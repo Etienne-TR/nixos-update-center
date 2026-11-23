@@ -78,7 +78,6 @@ prebuild_unit="$NAME-prebuild.service"
 
 runtime_dir="/run/$NAME"
 prebuild_status="$runtime_dir/status.json"
-prebuild_flatpak="$runtime_dir/flatpak"
 prebuild_result="/var/lib/$NAME/prebuild.json"
 
 # Dossiers de l'utilisateur (sans objet pour prebuild, lancé par root).
@@ -100,6 +99,11 @@ notify() { # icône, titre, corps, options en plus
 
 now() { date +%s; }
 
+# « 0 mise à jour », « 1 mise à jour », « 3 mises à jour ».
+count() { # nombre, singulier, pluriel
+  if [ "$1" -gt 1 ]; then echo "$1 $3"; else echo "$1 $2"; fi
+}
+
 # Écrit un fichier JSON d'un coup (lecteurs : jamais de fichier à moitié écrit).
 write_json() { # chemin ; JSON sur l'entrée standard
   local tmp="$1.tmp.$$"
@@ -117,11 +121,33 @@ part_order=()
 declare -A part_label=() part_state=()
 notes=()
 
+# Chaque partie a son journal et ses heures : elle forme une action à part
+# dans le Journal de l'interface.
+declare -A part_log=() part_start=() part_end=()
 parts_json() {
   local id
   for id in "${part_order[@]}"; do
-    printf '%s\t%s\t%s\n' "$id" "${part_label[$id]}" "${part_state[$id]}"
-  done | jq -R 'split("\t") | {id: .[0], label: .[1], state: .[2]}' | jq -s .
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "${part_label[$id]}" "${part_state[$id]}" \
+      "${part_log[$id]:-}" "${part_start[$id]:-}" "${part_end[$id]:-}"
+  done | jq -R 'split("\t") | {id: .[0], label: .[1], state: .[2], log: .[3],
+    started: (.[4] | tonumber? // null), finished: (.[5] | tonumber? // null)}' | jq -s .
+}
+
+# Une entrée d'historique par partie (« action »), reliées par « group ».
+# Notes : celles qui nomment la partie, plus les générales (push…).
+write_part_records() {
+  local id
+  for id in "${part_order[@]}"; do
+    jq -c --arg id "$id" --arg group "$run_id" --argjson started "$run_started" --argjson finished "$(now)" '
+      (.parts[] | select(.id == $id)) as $p
+      | {id: ($group + "-" + $id), group: $group, state: (if $p.state == "running" or $p.state == "pending" then "stopped" else $p.state end),
+         started: ($p.started // $started), finished: ($p.finished // $finished), parts: [$p],
+         notes: [.notes[] | select(
+           if test("^Système") then $id == "system"
+           elif test("Home Manager") then $id == "home"
+           else true end)],
+         log: (if $p.log != "" then $p.log else .log end)}' < <(run_record) >>"$history"
+  done
 }
 
 notes_json() {
@@ -437,10 +463,23 @@ part_home() {
 
 # Une seule mise à jour Flatpak à la fois (exécution complète, ou
 # flatpak-update lancé à côté) : la seconde attend la première.
+# Références à mettre à jour (flatpak-update REF…) ; aucune : toutes.
+flatpak_refs=() flatpak_commit=""
+flatpak_download=""
 part_flatpak() {
   (
     flock 7
-    flatpak update --user -y --noninteractive || exit 1
+    # Préparation : télécharger sans installer.
+    if [ -n "$flatpak_download" ]; then
+      flatpak update --user --no-deploy -y --noninteractive || exit 1
+      exit 0
+    fi
+    # Retour à une version précise (--commit) : une seule référence.
+    if [ -n "$flatpak_commit" ]; then
+      flatpak update --user -y --noninteractive --commit="$flatpak_commit" "${flatpak_refs[@]}" || exit 1
+      exit 0
+    fi
+    flatpak update --user -y --noninteractive "${flatpak_refs[@]}" || exit 1
     # Sans le bloc « These runtimes … are pinned and won't be removed »
     # répété à chaque fois. pipefail garde l'échec de flatpak.
     flatpak uninstall --user --unused -y --noninteractive 2>&1 |
@@ -450,26 +489,70 @@ part_flatpak() {
   ) 7>"$state/flatpak.lock"
 }
 
+# Exécution restée « running » alors que son processus n'existe plus (arrêt
+# du PC, plantage, kill -9) : notée « interrupted » et ajoutée à
+# l'historique, une seule fois. Fin : dernière écriture de son journal.
+recover_interrupted() {
+  local f pid fin
+  for f in "$run_json" "$state/flatpak.json"; do
+    [ -s "$f" ] || continue
+    [ "$(jq -r '.state // ""' "$f" 2>/dev/null)" = running ] || continue
+    pid=$(jq -r '.pid // 0' "$f")
+    [ "$pid" -gt 0 ] && kill -0 "$pid" 2>/dev/null && continue
+    fin=$(stat -c %Y "$(jq -r '.log // ""' "$f")" 2>/dev/null || stat -c %Y "$f")
+    jq -c --argjson fin "$fin" '.state = "interrupted" | .finished = $fin | .step = ""
+      | .parts |= map(if .state == "running" or .state == "pending" then .state = "interrupted" else . end)' "$f" >"$f.tmp"
+    # Une entrée d'historique par partie, comme une exécution terminée.
+    jq -c '. as $r | .parts[] as $p
+      | {id: ($r.id + "-" + $p.id), group: $r.id, state: $p.state,
+         started: ($p.started // $r.started), finished: ($p.finished // $r.finished), parts: [$p],
+         notes: $r.notes, log: (if ($p.log // "") != "" then $p.log else $r.log end)}' "$f.tmp" >>"$history"
+    mv -f "$f.tmp" "$f"
+  done
+}
+
 # Mise à jour des Flatpaks seule, à côté d'une exécution Nix (adopter,
 # appliquer) : état dans flatpak.json (même forme que run.json), journal à
 # part, entrée dans l'historique.
-cmd_flatpak_update() {
+cmd_flatpak_update() { # [--download | --commit C] [REF…] : seulement ces applications (à ce commit)
+  recover_interrupted
   [ "$(cfg .flatpak)" = true ] || die "Flatpak désactivé dans la configuration."
+  local r
+  # Téléchargement seul (préparation), action « flatpak_download ».
+  if [ "${1:-}" = --download ]; then
+    flatpak_download=1
+    shift
+  fi
+  if [ "${1:-}" = --commit ]; then
+    [[ "${2:-}" =~ ^[0-9a-f]{12,64}$ ]] || die "commit invalide : ${2:-}"
+    flatpak_commit="$2"
+    shift 2
+  fi
+  for r in "$@"; do
+    [[ "$r" =~ ^[A-Za-z0-9._/-]+$ ]] || die "référence Flatpak invalide : $r"
+    flatpak_refs+=("$r")
+  done
+  # Partie : « flatpak » (mise à jour) ou « flatpak_download » (préparation).
+  local pn=flatpak
+  [ -z "$flatpak_download" ] || pn=flatpak_download
   mkdir -p "$state/runs"
-  run_id="$(date +%Y%m%d-%H%M%S)-flatpak"
+  run_id="$(date +%Y%m%d-%H%M%S)-$pn"
   run_log="$state/runs/$run_id.log"
   run_started=$(now) run_state=running run_step="Mise à jour des Flatpaks"
-  part_order=(flatpak)
-  part_label[flatpak]="Flatpak"
-  part_state[flatpak]=running
+  [ -z "$flatpak_download" ] || run_step="Téléchargement des Flatpaks"
+  part_order=("$pn")
+  part_label[$pn]="Flatpak"
+  # Une application : son identifiant (app/org.gimp.GIMP/x86_64/stable).
+  [ "${#flatpak_refs[@]}" -eq 0 ] || part_label[$pn]="Flatpak ($(printf '%s\n' "${flatpak_refs[@]}" | cut -d/ -f2 | paste -sd, | sed 's/,/, /g'))"
+  part_state[$pn]=running
   local out="$state/flatpak.json"
   run_record | write_json "$out"
-  trap 'run_state=stopped part_state[flatpak]=failed run_finished=$(now); run_record | write_json "$out"; run_record | jq -c . >>"$history"; exit 143' TERM
+  trap 'run_state=stopped part_state[$pn]=failed run_finished=$(now); run_record | write_json "$out"; run_record | jq -c . >>"$history"; exit 143' TERM
   if part_flatpak >"$run_log" 2>&1; then
-    run_state=success part_state[flatpak]=success
+    run_state=success part_state[$pn]=success
   else
-    run_state=failed part_state[flatpak]=failed
-    notify dialog-error-symbolic "Mise à jour des Flatpaks en échec" "Voir le journal : onglet Historique" -t 0
+    run_state=failed part_state[$pn]=failed
+    notify dialog-error-symbolic "Mise à jour des Flatpaks en échec" "Voir le journal : onglet Journal" -t 0
   fi
   run_finished=$(now) run_step=""
   run_record | write_json "$out"
@@ -490,6 +573,7 @@ part_rollback_home() {
 }
 
 cmd_run() {
+  recover_interrupted
   local system="" home="" flatpak="" flake_update=""
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -523,8 +607,8 @@ cmd_run() {
   # Journal de l'exécution dans un fichier (suivi par `@command@` et
   # l'interface) en plus de la sortie (journal de l'unité).
   exec > >(tee -a "$run_log") 2>&1
-  # Garder les 30 derniers journaux.
-  find "$state/runs" -name '*.log' -printf '%T@ %p\n' | sort -rn | tail -n +31 | cut -d' ' -f2- |
+  # Garder les 90 derniers journaux (un par partie).
+  find "$state/runs" -name '*.log' -printf '%T@ %p\n' | sort -rn | tail -n +91 | cut -d' ' -f2- |
     xargs -r rm -f
 
   add_part() {
@@ -543,20 +627,27 @@ cmd_run() {
   write_run
 
   # Arrêt demandé (`@command@ --stop`, interface) : noté avant de sortir.
-  trap '[ -z "${flatpak_pid:-}" ] || kill "$flatpak_pid" 2>/dev/null; run_state=stopped run_finished=$(now); write_run; run_record | jq -c . >>"$history"; exit 143' TERM
+  trap 'run_state=stopped run_finished=$(now); write_run; write_part_records; exit 143' TERM
 
   cd "$flake"
   [ -z "$system$home$flatpak$rollback_system_gen$rollback_home_gen" ] || stop_prebuild
 
   local failed="" switch_ok="" switch_ko="" id
-  # Les Flatpaks ne dépendent pas de Nix : avec d'autres parties, ils se
-  # mettent à jour en parallèle, journal à part recopié à la fin.
-  local flatpak_pid="" flatpak_log="$state/runs/$run_id.flatpak"
+  # Les Flatpaks ne dépendent pas de Nix : avec d'autres parties, ils sont
+  # lancés à part (unité et action à eux, comme « Mettre à jour » de leur
+  # carte) et la suite n'attend pas.
   if [ -n "$flatpak" ] && [ "${#part_order[@]}" -gt 1 ]; then
-    part_state[flatpak]=running run_flatpak_log="$flatpak_log"
+    local o=()
+    for id in "${part_order[@]}"; do [ "$id" = flatpak ] || o+=("$id"); done
+    part_order=("${o[@]}")
+    if systemctl --user is-active --quiet "$NAME-flatpak" ||
+      systemd-run --user --collect --quiet --unit="$NAME-flatpak" --setenv=PATH="$PATH" "$0" flatpak-update; then
+      echo "Flatpaks : mis à jour à part (action « Mise à jour des Flatpaks »)."
+    else
+      echo "Lancement des Flatpaks à part impossible : à la suite."
+      part_order+=(flatpak)
+    fi
     write_run
-    (part_flatpak) >"$flatpak_log" 2>&1 </dev/null &
-    flatpak_pid=$!
   fi
   declare -A titles=(
     [flake]="Mise à jour du flake (nix flake update)"
@@ -566,8 +657,15 @@ cmd_run() {
     [rollback_system]="Retour à une génération système précédente"
     [rollback_home]="Retour à une génération Home Manager précédente"
   )
+  # Sorties : fd 5 et 6, celles de l'exécution (journal complet).
+  exec 5>&1 6>&2
+  local last=""
   for id in "${part_order[@]}"; do
-    [ -z "$flatpak_pid" ] || [ "$id" != flatpak ] || continue
+    part_log[$id]="$state/runs/$run_id-$id.log"
+    part_start[$id]=$(now)
+    last=$id
+    # Journal de la partie, en plus du journal complet.
+    exec > >(tee -a "${part_log[$id]}" >&5) 2>&1
     section "${titles[$id]}"
     part_state[$id]=running
     write_run
@@ -580,21 +678,12 @@ cmd_run() {
       failed=1
       case "$id" in system | home) switch_ko=1 ;; esac
     fi
+    part_end[$id]=$(now)
     write_run
   done
-
-  if [ -n "$flatpak_pid" ]; then
-    section "${titles[flatpak]} (en parallèle)"
-    if wait "$flatpak_pid"; then part_state[flatpak]=success; else part_state[flatpak]=failed; fi
-    cat "$flatpak_log"
-    rm -f "$flatpak_log"
-    run_flatpak_log=""
-    if [ "${part_state[flatpak]}" = failed ]; then
-      echo "*** ${part_label[flatpak]} : échec ***" >&2
-      failed=1
-    fi
-    write_run
-  fi
+  # La suite (commit, push, nettoyage) : dans le journal de la dernière
+  # partie aussi.
+  [ -z "$last" ] || exec > >(tee -a "${part_log[$last]}" >&5) 2>&1
 
   # flake.lock adopté : committé seulement si tous les switch ont réussi ;
   # un flake.lock qui casse un switch n'est ni committé ni publié.
@@ -657,7 +746,7 @@ cmd_run() {
     run_state=failed
   fi
   write_run
-  run_record | jq -c . >>"$history"
+  write_part_records
 
   # Une seule notification récapitulative, persistante en cas d'échec (sauf
   # pour une mise à jour du flake seule, faite par la routine).
@@ -685,7 +774,7 @@ cmd_run() {
 # système et la génération Home Manager et, en parallèle, télécharge les
 # Flatpaks de l'utilisateur sans les déployer.
 cmd_prebuild() {
-  local home rc=0 flatpak_pid="" paths
+  local home rc=0 paths
   home=$(cfg .userHome)
   finish() { # état, chemins construits (JSON)
     jq -n --arg state "$1" --argjson time "$(now)" --argjson paths "${2:-null}" \
@@ -700,21 +789,7 @@ cmd_prebuild() {
       env -u NIX_REMOTE HOME="$home" XDG_RUNTIME_DIR="/run/user/$(id -u "$user")" "$@"
   }
 
-  if [ "$(cfg .routine.flatpak)" = true ]; then
-    echo running >"$prebuild_flatpak"
-    (
-      if as_user flatpak update --user --no-deploy -y --noninteractive; then
-        echo "Flatpaks téléchargés."
-        echo "done" >"$prebuild_flatpak.tmp"
-      else
-        echo "Téléchargement des Flatpaks en échec."
-        echo failed >"$prebuild_flatpak.tmp"
-      fi
-      mv "$prebuild_flatpak.tmp" "$prebuild_flatpak"
-    ) &
-    flatpak_pid=$!
-  fi
-
+  # Les Flatpaks sont téléchargés à part (flatpak-download, action à elle).
   cd "$flake"
   echo "Préparation de $host et de Home Manager (construction seule, rien n'est activé)."
   jq -n --argjson t "$(now)" '{phase: "eval", builds: {}, downloads: {}, building: [],
@@ -743,11 +818,6 @@ cmd_prebuild() {
     rc=1
   fi
 
-  if [ -n "$flatpak_pid" ]; then
-    wait "$flatpak_pid" || true
-    [ "$(cat "$prebuild_flatpak")" = "done" ] || rc=1
-  fi
-
   rm -f "$pending_file"
   local built
   built=$(jq -R . "$paths" | jq -s 'if length == 2 then
@@ -771,6 +841,10 @@ cmd_boost() {
   systemctl is-active --quiet "$prebuild_unit" || die "aucune préparation en cours"
   sudo "$root_helper" boost
 }
+
+# Pause et reprise de la construction (gel de l'unité, par l'aide root).
+cmd_pause_prebuild() { sudo "$root_helper" pause; }
+cmd_resume_prebuild() { sudo "$root_helper" resume; }
 
 # ─────────────────────────── pending ───────────────────────────
 
@@ -918,7 +992,9 @@ cmd_flatpak_pending() {
   exec 9>"$state/flatpaks.lock"
   flock 9
   local list="[]"
+  echo "Recherche des mises à jour Flatpak (flatpak remote-ls --updates)…" >&2
   [ "$(cfg .flatpak)" != true ] || list=$(flatpak_updates)
+  echo "  $(count "$(jq length <<<"$list")" "mise à jour disponible" "mises à jour disponibles")" >&2
   jq -n --argjson f "$list" --argjson t "$(now)" '{flatpaks: $f, time: $t}' | write_json "$state/flatpaks.json"
 }
 
@@ -937,7 +1013,8 @@ flatpak_updates() {
         --arg from "$(sed -nE 's/^ *Version: (.*)$/\1/p' <<<"$installed" | head -n 1)" \
         --argjson fromDate "$( [ -n "$idate" ] && date -d "$idate" +%s || echo null)" \
         --argjson toDate "$( [ -n "$rdate" ] && date -d "$rdate" +%s || echo null)" \
-        '{id: $id, name: $name, branch: $branch, fromVersion: $from, toVersion: $to, size: $size,
+        --arg ref "$ref" \
+        '{id: $id, name: $name, branch: $branch, ref: $ref, fromVersion: $from, toVersion: $to, size: $size,
           fromDate: $fromDate, toDate: $toDate}'
     done | jq -s .
 }
@@ -991,6 +1068,8 @@ cmd_pending() {
   rm -f "$state/pending-errors.tmp"
   local sys_changed=null home_changed=null upstream="[]" upstream_ok=false
   local built_sys built_home
+  # Vérifiée souvent : rattrape aussi une exécution interrompue.
+  recover_interrupted
   local claude="null" unpushed="[]" out rc
   mkdir -p "$state"
   tmp=$(mktemp -d)
@@ -1015,7 +1094,11 @@ cmd_pending() {
     same_config=1
   local sys_evaluated="" home_evaluated=""
   if [ -n "$do_sys" ]; then
+    # Étapes sur stderr : affichées par l'interface (Journal) pendant la
+    # recherche.
+    echo "Évaluation du système…" >&2
     sys_changed=$(differs "$flake#nixosConfigurations.$host.config.system.build.toplevel" /run/current-system "$tmp/target-sys")
+    echo "  système : $([ "$sys_changed" = true ] && echo "à appliquer" || { [ "$sys_changed" = false ] && echo "à jour"; } || echo "évaluation impossible")" >&2
     target_sys=$(cat "$tmp/target-sys" 2>/dev/null || true)
     sys_evaluated=1
   elif [ -n "$same_config" ]; then
@@ -1028,9 +1111,11 @@ cmd_pending() {
     fi
   fi
   if [ -n "$do_home" ]; then
+    echo "Évaluation de Home Manager…" >&2
     home_changed=$(differs "$flake#homeConfigurations.$hmconf.activationPackage" \
       "$HOME/.local/state/nix/profiles/home-manager" "$tmp/target-home")
     target_home=$(cat "$tmp/target-home" 2>/dev/null || true)
+    echo "  Home Manager : $([ "$home_changed" = true ] && echo "à appliquer" || { [ "$home_changed" = false ] && echo "à jour"; } || echo "évaluation impossible")" >&2
     home_evaluated=1
   elif [ -n "$same_config" ]; then
     target_home=$(jq -r '.apply.home.target // ""' "$prev")
@@ -1089,15 +1174,17 @@ cmd_pending() {
   fi
 
   # 3 : nouvelles versions proposées par le flake, sans toucher flake.lock.
+  [ -z "$do_flake" ] || echo "Recherche des nouvelles versions des entrées du flake (nix flake update à blanc)…" >&2
   if [ -n "$do_flake" ] && (cd "$flake" && nix flake update --output-lock-file "$tmp/new.lock" >/dev/null 2>&1); then
     upstream=$(lock_diff "$cur" "$tmp/new.lock")
     upstream_ok=true
+    echo "  $(count "$(jq length <<<"$upstream")" "nouvelle version en ligne" "nouvelles versions en ligne")" >&2
   fi
 
   # Flatpaks : aussi toutes les 5 minutes avec la vérification rapide
   # (quelques secondes).
   # En arrière-plan, dans flatpaks.json (voir cmd_flatpak_pending).
-  local flatpak_time flatpak_pid=""
+  local flatpak_time
   flatpak_time=$(jq '.time // 0' "$state/flatpaks.json" 2>/dev/null || echo 0)
   if [ -n "$pending_quick" ] && [ -z "$do_flatpak" ] && [ $(($(now) - flatpak_time)) -ge 300 ]; then
     do_flatpak=1
@@ -1106,7 +1193,6 @@ cmd_pending() {
     # Sans le verrou de pending.json (fd 8) ni la sortie : la suite n'attend
     # pas la recherche Flatpak.
     (exec 8>&-; cmd_flatpak_pending) >/dev/null 2>&1 &
-    flatpak_pid=$!
   fi
 
   if [ -n "$do_claude" ] && [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
@@ -1125,6 +1211,11 @@ cmd_pending() {
   local uncommitted
   uncommitted=$(git -C "$repo" status --porcelain -- "$dir" 2>/dev/null |
     jq -R -s --arg dir "$dir/" 'split("\n") | map(select(length > 0) | "\(.[0:2]) \(.[3:] | ltrimstr($dir))")')
+  # Date de dernière modification de chacun (fichier supprimé : absent).
+  local uncommitted_times f
+  uncommitted_times=$(jq -r '.[] | .[3:]' <<<"$uncommitted" | while IFS= read -r f; do
+    [ -e "$flake/$f" ] && printf '%s\t%s\n' "$f" "$(stat -c %Y "$flake/$f")"
+  done | jq -R 'split("\t") | {key: .[0], value: (.[1] | tonumber)}' | jq -s 'from_entries')
 
   local full_time
   full_time=$(now)
@@ -1137,7 +1228,7 @@ cmd_pending() {
     --arg tsys "$target_sys" --arg thome "$target_home" --arg head "$head" --arg dirty "$dirty_hash" \
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
-    --argjson claude "$claude" --argjson unpushed "$unpushed" --argjson uncommitted "$uncommitted" \
+    --argjson claude "$claude" --argjson unpushed "$unpushed" --argjson uncommitted "$uncommitted" --argjson uncommittedTimes "$uncommitted_times" \
     --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
     { time: $time, quickTime: $quickTime, quick: $quick, head: $head, dirtyHash: $dirty,
       apply: {
@@ -1148,7 +1239,7 @@ cmd_pending() {
         flake: ($flakech | {commits, dirty}) },
       upstream: {checked: $upok, inputs: $upstream},
       claudeDesktop: $claude, unpushed: $unpushed,
-      uncommitted: $uncommitted, errors: $errors }' |
+      uncommitted: $uncommitted, uncommittedTimes: $uncommittedTimes, errors: $errors }' |
     tee "$state/pending.json.tmp"
   mv -f "$state/pending.json.tmp" "$state/pending.json"
   rm -rf "$tmp"
@@ -1172,7 +1263,26 @@ cmd_generations() {
   }
   local hm="$HOME/.local/state/nix/profiles/home-manager"
   jq -n --argjson system "$(gens /nix/var/nix/profiles/system /nix/var/nix/profiles/system)" \
-    --argjson home "$(gens "$hm" "$hm")" '{system: $system, home: $home}'
+    --argjson home "$(gens "$hm" "$hm")" --argjson flatpak "$(flatpak_versions)" \
+    '{system: $system, home: $home, flatpak: $flatpak}'
+}
+
+# Versions des applications Flatpak installées (installation user), d'après
+# le journal de flatpak (commits complets, contrairement à `flatpak
+# history`) : chaque déploiement, du plus ancien au plus récent, avec
+# « current » pour le commit installé maintenant.
+flatpak_versions() {
+  [ "$(cfg .flatpak)" = true ] || { echo "[]" && return; }
+  local installed
+  installed=$(flatpak list --user --app --columns=ref,active 2>/dev/null |
+    jq -R 'split("\t") | {key: ("app/" + .[0]), value: .[1]}' | jq -s 'from_entries')
+  journalctl -o json --no-pager --since "-90 days" MESSAGE_ID=c7b39b1e006b464599465e105b361485 2>/dev/null |
+    jq -c --argjson inst "$installed" '
+      select(.INSTALLATION == "user" and (.OPERATION | startswith("deploy")) and (.REF | startswith("app/")))
+      | {time: ((.__REALTIME_TIMESTAMP | tonumber) / 1000000 | floor), ref: .REF,
+         app: (.REF | split("/")[1]), commit: .COMMIT, old: (.OLD_COMMIT // ""),
+         operation: .OPERATION, current: (($inst[.REF] // "") as $a | $a != "" and (.COMMIT | startswith($a)))}' |
+    jq -s .
 }
 
 # ─────────────────────────── weekly ───────────────────────────
@@ -1202,6 +1312,7 @@ cmd_check() {
   mkdir -p "$(dirname "$pending_file")"
   touch "$pending_file"
   systemctl start "$prebuild_unit" || echo "Lancement de la préparation en arrière-plan impossible."
+  start_flatpak_download
   if [ "$(sha256sum flake.lock)" = "$before" ]; then
     echo "flake.lock inchangé : seulement la préparation des Flatpaks."
     return 3
@@ -1279,15 +1390,27 @@ open_terminal() {
 }
 
 # Préparation demandée à la main (interface).
+# Téléchargement des Flatpaks de la préparation : action à part (unité
+# utilisateur, pas besoin de root), lancée avec la construction Nix.
+start_flatpak_download() {
+  [ "$(cfg .flatpak)" = true ] && [ "$(cfg .routine.flatpak)" = true ] || return 0
+  systemctl --user is-active --quiet "$NAME-flatpak" && return 0
+  systemd-run --user --collect --quiet --unit="$NAME-flatpak" --setenv=PATH="$PATH" "$0" flatpak-update --download ||
+    echo "Lancement du téléchargement des Flatpaks impossible."
+}
+
 cmd_start_prebuild() {
   mkdir -p "$(dirname "$pending_file")"
   touch "$pending_file"
   systemctl start "$prebuild_unit"
+  start_flatpak_download
 }
 
 # Préparation arrêtée à la main : pas de reprise au prochain démarrage.
 cmd_stop_prebuild() {
   rm -f "$pending_file"
+  # En pause : la dégeler, sinon l'arrêt resterait bloqué.
+  [ ! -e "/run/$NAME/paused" ] || sudo "$root_helper" resume >/dev/null || true
   systemctl stop --no-block "$prebuild_unit"
 }
 
@@ -1318,7 +1441,7 @@ cmd="${1:-}"
 [ $# -eq 0 ] || shift
 case "$cmd" in
   run) cmd_run "$@" ;;
-  flatpak-update) cmd_flatpak_update ;;
+  flatpak-update) cmd_flatpak_update "$@" ;;
   prebuild) cmd_prebuild ;;
   pending) cmd_pending "$@" ;;
   generations) cmd_generations ;;
@@ -1339,5 +1462,7 @@ case "$cmd" in
   boost) cmd_boost ;;
   start-prebuild) cmd_start_prebuild ;;
   stop-prebuild) cmd_stop_prebuild ;;
+  pause-prebuild) cmd_pause_prebuild ;;
+  resume-prebuild) cmd_resume_prebuild ;;
   *) die "sous-commande inconnue : ${cmd:-(aucune)} (run, prebuild, pending, generations, weekly, news, boost)" ;;
 esac
