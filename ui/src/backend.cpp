@@ -145,7 +145,10 @@ void Backend::readFlatpakRun() {
   m_flatpakRun = run;
   emit flatpakRunChanged();
   // Fin : nouvelle liste des Flatpaks à mettre à jour.
-  if (wasActive && !active) refreshPart("flatpak");
+  if (wasActive && !active) {
+    m_flatpakPaused = false;
+    refreshPart("flatpak");
+  }
 }
 
 // Journal de l'exécution, lu au fur et à mesure (derniers 400 Ko).
@@ -176,6 +179,7 @@ void Backend::readPrebuild() {
   if (!st.isEmpty()) {
     st.insert("flatpak", readText(dir + "/flatpak"));
     st.insert("boosted", QFile::exists(dir + "/boosted"));
+    st.insert("paused", QFile::exists(dir + "/paused"));
     st.insert("fraction", nixFraction(st));
   }
   const QVariantMap result = readJson("/var/lib/" + name() + "/prebuild.json");
@@ -306,11 +310,29 @@ void Backend::checkUpdates() {
   emit runStarted();
 }
 
-void Backend::startFlatpakUpdate() {
-  QProcess::startDetached("systemd-run", {"--user", "--collect", "--quiet",
-                                          QStringLiteral("--unit=" APP_NAME "-flatpak"),
-                                          "--setenv=PATH=" + qEnvironmentVariable("PATH"), m_engine,
-                                          "flatpak-update"});
+void Backend::startFlatpakUpdate(const QStringList &refs) {
+  QProcess::startDetached("systemd-run", QStringList{"--user", "--collect", "--quiet",
+                                                     QStringLiteral("--unit=" APP_NAME "-flatpak"),
+                                                     "--setenv=PATH=" + qEnvironmentVariable("PATH"),
+                                                     m_engine, "flatpak-update"} + refs);
+}
+
+void Backend::stopFlatpak() {
+  QProcess::startDetached("systemctl", {"--user", "thaw", QStringLiteral(APP_NAME "-flatpak")});
+  QProcess::startDetached("systemctl", {"--user", "stop", "--no-block", QStringLiteral(APP_NAME "-flatpak")});
+  m_flatpakPaused = false;
+  emit flatpakRunChanged();
+}
+
+// Gel de l'unité (cgroup) : flatpak s'arrête net et reprend où il en était.
+void Backend::pauseFlatpak(bool paused) {
+  QProcess::startDetached("systemctl", {"--user", paused ? "freeze" : "thaw", QStringLiteral(APP_NAME "-flatpak")});
+  m_flatpakPaused = paused;
+  emit flatpakRunChanged();
+}
+
+void Backend::stopCheck(const QString &part) {
+  if (QProcess *p = m_checkProcs.value(part)) p->terminate();
 }
 
 void Backend::runEngine(const QStringList &args, std::function<void(int, const QByteArray &)> done) {
@@ -363,6 +385,7 @@ void Backend::stopRun() { QProcess::startDetached(QStringLiteral(APP_NAME), {"--
 void Backend::startPrebuild() { engine({"start-prebuild"}); }
 void Backend::stopPrebuild() { engine({"stop-prebuild"}); }
 void Backend::boostPrebuild() { engine({"boost"}); }
+void Backend::pausePrebuild(bool paused) { engine({paused ? "pause-prebuild" : "resume-prebuild"}); }
 // 400 dernières lignes du journal du service de préparation.
 void Backend::refreshPrebuildLog() {
   if (m_prebuildLogBusy) return;
@@ -402,8 +425,19 @@ void Backend::runPending(const QStringList &args) {
   m_pendingParts.append(key);
   emit pendingChanged();
   auto *p = new QProcess(this);
+  // Recherche visible (pas la rapide) : ses étapes pour le Journal.
+  if (key != "quick") {
+    m_checkLog = QString("$ nixos-update-center-engine pending %1\n").arg(args.join(' '));
+    emit checkLogChanged();
+    connect(p, &QProcess::readyReadStandardError, this, [this, p] {
+      m_checkLog += QString::fromUtf8(p->readAllStandardError());
+      emit checkLogChanged();
+    });
+  }
+  m_checkProcs.insert(key, p);
   connect(p, &QProcess::finished, this, [this, p, key] {
     p->deleteLater();
+    m_checkProcs.remove(key);
     m_pendingParts.removeOne(key);
     m_pendingMtime = QDateTime();
     readPending();

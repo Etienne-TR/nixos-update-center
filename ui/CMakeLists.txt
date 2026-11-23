@@ -21,11 +21,15 @@ qt_add_qml_module(${APP_NAME}-ui
   QML_FILES
     qml/Main.qml
     qml/PendingPage.qml
-    qml/RunPage.qml
-    qml/HistoryPage.qml
+    qml/JournalPage.qml
+    qml/GenerationsPage.qml
     qml/SettingsPage.qml
     qml/RunProgress.qml
     qml/InputRow.qml
+    qml/MenuEntry.qml
+    qml/LineMenu.qml
+    qml/SegmentedToggle.qml
+    qml/Tag.qml
     qml/IconAction.qml
     qml/Card.qml
     qml/MonoText.qml

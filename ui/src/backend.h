@@ -3,6 +3,8 @@
 #pragma once
 
 #include <QDateTime>
+#include <QHash>
+#include <QProcess>
 #include <QObject>
 #include <QString>
 #include <QTimer>
@@ -36,6 +38,10 @@ class Backend : public QObject {
   // Vérifications en cours, en même temps : quick, all, system, home,
   // config, flake, flatpak.
   Q_PROPERTY(QStringList pendingParts READ pendingParts NOTIFY pendingChanged)
+  // Étapes de la dernière recherche (sortie d'erreur du moteur), en direct.
+  Q_PROPERTY(QString checkLog READ checkLog NOTIFY checkLogChanged)
+  // Flatpaks en pause (unité gelée par systemd).
+  Q_PROPERTY(bool flatpakPaused READ flatpakPaused NOTIFY flatpakRunChanged)
   Q_PROPERTY(int pendingCount READ pendingCount NOTIFY pendingChanged)
   Q_PROPERTY(QVariantList history READ history NOTIFY historyChanged)
   Q_PROPERTY(QVariantMap generations READ generations NOTIFY generationsChanged)
@@ -70,6 +76,8 @@ class Backend : public QObject {
     return {};
   }
   QStringList pendingParts() const { return m_pendingParts; }
+  QString checkLog() const { return m_checkLog; }
+  bool flatpakPaused() const { return m_flatpakPaused; }
   // Cette partie (system, home, config, flake, flatpak) est-elle en cours
   // de vérification (seule ou dans une complète) ?
   Q_INVOKABLE bool checking(const QString &part) const {
@@ -90,7 +98,13 @@ class Backend : public QObject {
   Q_INVOKABLE void startUpdate(const QStringList &parts);
   Q_INVOKABLE void checkUpdates();
   // Flatpaks seuls, dans leur propre unité : possible pendant une exécution.
-  Q_INVOKABLE void startFlatpakUpdate();
+  // refs vide : toutes ; sinon ces applications seulement.
+  Q_INVOKABLE void startFlatpakUpdate(const QStringList &refs = {});
+  // Arrêt, pause et reprise des Flatpaks (unité <nom>-flatpak).
+  Q_INVOKABLE void stopFlatpak();
+  Q_INVOKABLE void pauseFlatpak(bool paused);
+  // Arrêt d'une recherche en cours (all, system, home, config, flake, flatpak).
+  Q_INVOKABLE void stopCheck(const QString &part);
   // nix flake update <entrée> (commit de flake.lock), dans l'unité de mise à jour.
   Q_INVOKABLE void updateInput(const QString &name);
   Q_INVOKABLE void refreshRoutine();
@@ -100,6 +114,8 @@ class Backend : public QObject {
   Q_INVOKABLE void startPrebuild();
   Q_INVOKABLE void stopPrebuild();
   Q_INVOKABLE void boostPrebuild();
+  // Pause / reprise de la construction (gel de l'unité).
+  Q_INVOKABLE void pausePrebuild(bool paused);
   Q_INVOKABLE void openPrebuildJournal();
   Q_INVOKABLE void refreshPrebuildLog();
   // quick : git seulement (démarrage, ouverture, toutes les 5 minutes).
@@ -116,6 +132,7 @@ class Backend : public QObject {
  signals:
   void runChanged();
   void flatpakRunChanged();
+  void checkLogChanged();
   void logChanged();
   void prebuildLogChanged();
   void prebuildChanged();
@@ -159,6 +176,9 @@ class Backend : public QObject {
   qint64 m_logPos = 0;
   double m_progress = -1;
   QStringList m_pendingParts;
+  QString m_checkLog;
+  bool m_flatpakPaused = false;
+  QHash<QString, QProcess *> m_checkProcs;
   QDateTime m_pendingMtime, m_flatpaksMtime, m_historyMtime;
   qint64 m_prebuildSince = 0;
 };
