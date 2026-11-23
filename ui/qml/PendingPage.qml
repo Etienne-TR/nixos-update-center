@@ -56,12 +56,6 @@ ScrollView {
         return Math.max(cur(g.system), cur(g.home));
     }
     // Fin de la dernière exécution où cette partie a réussi (historique), ou 0.
-    function lastSuccess(id) {
-        let t = 0;
-        for (const h of backend.history)
-            if ((h.parts || []).some(p => p.id === id && p.state === "success")) t = Math.max(t, h.finished || 0);
-        return t;
-    }
     function compareUrl(input) {
         if (input.to.type !== "github" || !input.from || !input.from.rev || !input.to.rev) return "";
         return "https://github.com/" + input.to.owner + "/" + input.to.repo + "/compare/"
@@ -75,18 +69,20 @@ ScrollView {
         Layout.topMargin: Kirigami.Units.largeSpacing
         font.weight: 650  // entre demi-gras (600) et gras (700)
     }
-    component ListLine: RowLayout {
+    // Ligne simple d'une liste : même hauteur que les lignes cliquables.
+    component ListLine: ClickableRow {
+        id: ll
         property string text
         property string scope
         property bool mono: true
-        Layout.fillWidth: true
+        clickable: false
         Label {
             Layout.fillWidth: true
-            text: parent.text
+            text: ll.text
             elide: Text.ElideRight
-            font.family: parent.mono ? Kirigami.Theme.fixedWidthFont.family : Kirigami.Theme.defaultFont.family
+            font.family: ll.mono ? Kirigami.Theme.fixedWidthFont.family : Kirigami.Theme.defaultFont.family
         }
-        Label { visible: parent.scope.length > 0; text: parent.scope; opacity: 0.6 }
+        Label { visible: ll.scope.length > 0; text: ll.scope; opacity: 0.6 }
     }
 
     ColumnLayout {
@@ -113,35 +109,23 @@ ScrollView {
             // bandeau du bas.
             // Phrase seulement quand il y a quelque chose à dire (à préparer,
             // état inconnu) ; sinon la pastille ✓ suffit.
-            bodyVisible: !backend.prebuildActive && (prep === "stale" || prep === "unknown")
+            // Arrêtée ou incomplète : la date et le bouton « Reprendre » suffisent.
+            readonly property bool resumable: prep === "stale" && (page.result.state === "stopped" || page.result.state === "failed")
+            bodyVisible: !backend.prebuildActive && !resumable && (prep === "stale" || prep === "unknown")
             badge: backend.prebuildActive ? "" : prep === "stale" ? "●" : prep === "unknown" ? "?" : "✓"
             badgeColor: prep === "stale" ? Kirigami.Theme.neutralTextColor
                       : prep === "unknown" ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.positiveTextColor
-            subtitle: page.result.time ? "préparée " + window.when(page.result.time) : ""
+            // Date de la dernière préparation, avec son issue.
+            subtitle: !page.result.time ? ""
+                : ({ success: "préparée ", failed: "incomplète ", stopped: "arrêtée " }[page.result.state] || "préparée ")
+                  + window.when(page.result.time)
             actions: [
-            // En cours : icônes discrètes (l'avancement est dans le bandeau).
-            IconAction {
-                visible: backend.prebuildActive && !page.pre.boosted
-                iconName: "media-seek-forward"
-                tooltip: "Passer à pleine vitesse (la préparation tourne en priorité minimale). nixos-update-center-engine boost"
-                onClicked: backend.boostPrebuild()
-            },
-            IconAction {
-                visible: backend.prebuildActive
-                iconName: "utilities-terminal-symbolic"
-                tooltip: "Journal de la préparation (journalctl -f -u nixos-update-center-prebuild, dans un terminal)"
-                onClicked: backend.openPrebuildJournal()
-            },
-            IconAction {
-                visible: backend.prebuildActive
-                iconName: "process-stop-symbolic"
-                tooltip: "Arrêter la préparation (ce qui est déjà construit est gardé). nixos-update-center-engine stop-prebuild"
-                onClicked: backend.stopPrebuild()
-            },
+            // En cours : vitesse, pause, arrêt et terminal sont dans le
+            // bandeau du bas.
             Button {
                 visible: !backend.prebuildActive && !window.running && (prepCard.prep === "stale" || prepCard.prep === "unknown")
                 icon.name: "media-playback-start-symbolic"
-                text: "Préparer"
+                text: prepCard.resumable ? "Reprendre" : "Préparer"
                 enabled: !window.running
                 onClicked: backend.startPrebuild()
                 ToolTip.visible: hovered
@@ -162,10 +146,10 @@ ScrollView {
                         if (prepCard.prep === "none") return "Rien à préparer.";
                         if (prepCard.prep === "ready") return "Prête : Appliquer n'aura qu'à activer.";
                         if (prepCard.prep === "stale") {
-                            if (!r.state) return "Pas encore préparée : Appliquer construira tout.";
-                            if (r.state === "failed") return "Incomplète : Appliquer construira ce qui manque.";
-                            if (r.state === "stopped") return "Arrêtée avant la fin : Appliquer construira ce qui manque.";
-                            return "Dépassée : la config a changé depuis la dernière préparation.";
+                            if (!r.state) return "Pas encore préparée.";
+                            if (r.state === "failed") return "Incomplète : Préparer reprendra ce qui manque.";
+                            if (r.state === "stopped") return "Arrêtée avant la fin : Préparer reprendra ce qui manque.";
+                            return "Dépassée : la config a changé depuis.";
                         }
                         return "État inconnu : la configuration n'a pas pu être évaluée.";
                     }
@@ -254,9 +238,9 @@ ScrollView {
                 model: confCard.files
                 // « flake.nix  aujourd'hui à 12:14 » : la date en retrait,
                 // juste après le nom.
-                RowLayout {
+                ClickableRow {
                     required property var modelData
-                    Layout.fillWidth: true
+                    clickable: false
                     Label { text: modelData.text }
                     Label {
                         Layout.fillWidth: true
@@ -274,7 +258,11 @@ ScrollView {
             }
             Repeater {
                 model: confCard.unpushed
-                ListLine { required property var modelData; text: page.commitText(modelData.subject); mono: false }
+                ListLine {
+                    required property var modelData
+                    text: page.commitText(modelData.subject)
+                    mono: false
+                }
             }
 
             // À installer.
@@ -300,23 +288,12 @@ ScrollView {
             }
             // Ligne cliquable (liste des paquets) quand la préparation l'a
             // calculée.
-            RowLayout {
+            ClickableRow {
                 id: installLine
-                readonly property bool clickable: confCard.packages.length > 0
                 visible: confCard.anyChanged
-                Layout.fillWidth: true
-                HoverHandler { id: installHover; cursorShape: installLine.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor }
-                // Comme les entrées : clic, menu sous le curseur.
-                TapHandler { enabled: installLine.clickable; onTapped: (point) => installMenu.popup(installLine, point.position.x, installLine.height) }
-                LineMenu {
-                    id: installMenu
-                    MenuEntry {
-                        text: "Voir les paquets"
-                        onTriggered: packagesDialog.open()
-                    }
-                }
+                clickable: confCard.packages.length > 0
+                onClicked: packagesDialog.open()
                 Label {
-                    color: installHover.hovered && installLine.clickable ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
                     text: confCard.packages.length > 0
                         ? "Installation de " + confCard.packages.length + (confCard.packages.length > 1 ? " paquets" : " paquet")
                         // Génération déjà construite (préparation) : il ne
@@ -377,39 +354,21 @@ ScrollView {
                 // « Appliquer » : les deux parties (une partie à jour est
                 // sautée). Bouton divisé : la flèche collée à droite, quand les
                 // deux sont à appliquer, propose une seule partie.
-                RowLayout {
+                SplitButton {
                     visible: (!confCard.allInstalled || confCard.lockInputs.length > 0) && !window.running
-                    spacing: 0
-                    Button {
-                        icon.name: "media-playback-start-symbolic"
-                        text: "Appliquer"
-                        onClicked: backend.startUpdate(["--system", "--home"])
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 500
-                        ToolTip.text: "update --system --home : système puis Home Manager ; une partie déjà à jour est sautée. Ensuite commit de flake.lock s'il a changé, push des commits, nh clean."
+                    iconName: "media-playback-start-symbolic"
+                    text: "Appliquer"
+                    tooltip: "update --system --home : système puis Home Manager ; une partie déjà à jour est sautée. Ensuite commit de flake.lock s'il a changé, push des commits, nh clean."
+                    hasMenu: confCard.sys.changed !== false && confCard.home.changed !== false
+                    arrowTooltip: "Appliquer une seule partie"
+                    onClicked: backend.startUpdate(["--system", "--home"])
+                    MenuEntry {
+                        text: "Système seulement"
+                        onTriggered: backend.startUpdate(["--system"])
                     }
-                    Button {
-                        id: partMenuButton
-                        visible: confCard.sys.changed !== false && confCard.home.changed !== false
-                        icon.name: "pan-down-symbolic"
-                        display: AbstractButton.IconOnly
-                        implicitWidth: implicitHeight * 0.8
-                        Layout.leftMargin: -1
-                        onClicked: partMenu.popup(partMenuButton, 0, partMenuButton.height)
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 500
-                        ToolTip.text: "Appliquer une seule partie"
-                        Menu {
-                            id: partMenu
-                            MenuItem {
-                                text: "Système seulement"
-                                onTriggered: backend.startUpdate(["--system"])
-                            }
-                            MenuItem {
-                                text: "Utilisateur seulement"
-                                onTriggered: backend.startUpdate(["--home"])
-                            }
-                        }
+                    MenuEntry {
+                        text: "Utilisateur seulement"
+                        onTriggered: backend.startUpdate(["--home"])
                     }
                 },
                 IconAction {
@@ -429,7 +388,8 @@ ScrollView {
             readonly property var online: page.upstream.inputs || []
             readonly property bool hasOnline: online.length > 0
             title: "Mise à jour du flake"
-            subtitle: page.lastSuccess("flake") ? "adoptée " + window.when(page.lastSuccess("flake")) : ""
+            // Dernière recherche en ligne : dit si la liste est fraîche.
+            subtitle: page.upstream.time ? "vérifié " + window.when(page.upstream.time) : ""
             bodyVisible: hasOnline || !page.upstream.checked || window.running
             badge: hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
@@ -481,47 +441,39 @@ ScrollView {
             readonly property bool busy: backend.flatpakRun.active === true
                 || (window.running && (backend.run.parts || []).some(p => p.id === "flatpak" && (p.state === "running" || p.state === "pending")))
             title: "Flatpaks"
-            subtitle: page.lastSuccess("flatpak") ? "mis à jour " + window.when(page.lastSuccess("flatpak")) : ""
+            subtitle: page.pending.flatpakTime ? "vérifié " + window.when(page.pending.flatpakTime) : ""
             bodyVisible: (page.pending.flatpaks || []).length > 0
             badge: (page.pending.flatpaks || []).length > 0 ? "●" : "✓"
             badgeColor: (page.pending.flatpaks || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
             Repeater {
                 model: page.pending.flatpaks || []
                 // « GIMP  3.2.8 → 3.2.9 · 102,5 Mo (4 jours) » ; même version :
-                // nouvelle compilation.
+                // affichée une seule fois.
                 // Ligne cliquable : menu « Mettre à jour cette application ».
-                RowLayout {
+                ClickableRow {
                     id: fpRow
                     required property var modelData
-                    readonly property bool lit: fpRowHover.hovered && !fpCard.busy
-                    Layout.fillWidth: true
-                    HoverHandler { id: fpRowHover; cursorShape: fpCard.busy ? Qt.ArrowCursor : Qt.PointingHandCursor }
-                    TapHandler {
-                        enabled: !fpCard.busy
-                        onTapped: (point) => fpMenu.popup(fpRow, point.position.x, fpRow.height)
+                    // Fiche de l'application, avec « Mettre à jour » en bas.
+                    onClicked: {
+                        const m = fpRow.modelData;
+                        window.showInfo(m.name,
+                            [m.fromVersion && m.toVersion && m.fromVersion !== m.toVersion ? "Version : " + m.fromVersion + " → " + m.toVersion
+                                 : m.toVersion ? "Version : " + m.toVersion + " (nouvelle compilation)" : "",
+                             m.size ? "Téléchargement : " + m.size : "",
+                             "Identifiant : " + m.id + " (" + m.branch + ")"].filter(x => x).join("\n"),
+                            [{ text: "Mettre à jour cette application", enabled: !fpCard.busy && !!m.ref,
+                               run: () => backend.startFlatpakUpdate([m.ref]) }]);
                     }
-                    LineMenu {
-                        id: fpMenu
-                        MenuEntry {
-                            text: "Mettre à jour cette application"
-                            enabled: !fpCard.busy && !!fpRow.modelData.ref
-                            onTriggered: backend.startFlatpakUpdate([fpRow.modelData.ref])
-                        }
-                    }
-                    Label {
-                        text: modelData.name
-                        color: fpRow.lit ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
-                    }
+                    Label { text: fpRow.modelData.name }
                     Label {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
                         elide: Text.ElideRight
-                        opacity: fpRow.lit ? 1 : 0.7
-                        color: fpRow.lit ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                        opacity: 0.7
                         text: {
-                            const m = modelData, parts = [];
+                            const m = fpRow.modelData, parts = [];
                             if (m.fromVersion && m.toVersion)
-                                parts.push(m.fromVersion === m.toVersion ? m.toVersion + ", nouvelle compilation" : m.fromVersion + " → " + m.toVersion);
+                                parts.push(m.fromVersion === m.toVersion ? m.toVersion : m.fromVersion + " → " + m.toVersion);
                             let lag = "";
                             if (m.fromDate && m.toDate) {
                                 const d = Math.round((m.toDate - m.fromDate) / 86400);
@@ -533,7 +485,7 @@ ScrollView {
                         }
                         HoverHandler { id: fpHover }
                         ToolTip.visible: fpHover.hovered
-                        ToolTip.text: modelData.id + ", " + modelData.branch
+                        ToolTip.text: fpRow.modelData.id + ", " + fpRow.modelData.branch
                     }
                 }
             }

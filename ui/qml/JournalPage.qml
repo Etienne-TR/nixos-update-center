@@ -21,10 +21,10 @@ ColumnLayout {
     // Titre d'une partie (une action) d'après son identifiant.
     function partTitle(p) {
         switch (p.id) {
-        case "system": return "Mise à jour du système";
-        case "home": return "Mise à jour de l'utilisateur";
-        case "flatpak_download": return "Téléchargement des Flatpaks";
-        case "flatpak": return p.label && p.label !== "Flatpak" ? "Mise à jour des Flatpaks (" + p.label.replace(/^Flatpak \((.*)\)$/, "$1") + ")" : "Mise à jour des Flatpaks";
+        case "system": return "Mise à jour système";
+        case "home": return "Mise à jour utilisateur";
+        case "flatpak_download": return "Préparation Flatpak";
+        case "flatpak": return p.label && p.label !== "Flatpak" ? "Mise à jour Flatpak (" + p.label.replace(/^Flatpak \((.*)\)$/, "$1") + ")" : "Mise à jour Flatpak";
         case "flake": {
             // « Flake (a b) » : ces entrées ; « Flake » : toutes.
             const m = /^Flake \((.*)\)$/.exec(p.label || "");
@@ -89,14 +89,19 @@ ColumnLayout {
             running.push({ section: "En cours", id: "flatpak", title: page.partTitle((fp.parts || [])[0] || { id: "flatpak" }),
                            state: "running", detail: "" });
         if (backend.prebuildActive)
-            running.push({ section: "En cours", id: "prebuild", title: "Construction de la nouvelle génération", state: "running",
-                           detail: pre.fraction >= 0 ? Math.round(pre.fraction * 100) + " %" : "évaluation" });
+            running.push({ section: "En cours", id: "prebuild", title: "Préparation Nix", state: "running",
+                           // « évaluation de la configuration », puis « 89 % · 120 sur
+                           // 146 éléments » (constructions et téléchargements).
+                           detail: pre.phase === "eval" || !(pre.fraction >= 0) ? "évaluation"
+                                 : Math.round(pre.fraction * 100) + " % · "
+                                   + (((pre.builds || {}).done || 0) + ((pre.downloads || {}).done || 0)) + "/"
+                                   + (((pre.builds || {}).expected || 0) + ((pre.downloads || {}).expected || 0)) + " éléments" });
         return running;
     }
     readonly property var tasks: {
         const running = page.runningTasks.slice(), past = [];
         if (!backend.prebuildActive && result.state)
-            past.push({ id: "prebuild", title: "Construction de la nouvelle génération", state: result.state,
+            past.push({ id: "prebuild", title: "Préparation Nix", state: result.state,
                         detail: window.shortWhen(result.time), stateText: result.state === "failed" ? "incomplète" : stateWord(result.state),
                         section: window.daySection(result.time),
                         time: result.time });
@@ -172,7 +177,6 @@ ColumnLayout {
 
     // Filtre de la liste.
     RowLayout {
-        visible: page.current.length === 0
         Layout.fillWidth: true
         // Deux filtres croisés : domaine et nature.
         SegmentedToggle {
@@ -190,68 +194,59 @@ ColumnLayout {
     }
     // Liste pleine largeur.
     ListView {
-        visible: page.current.length === 0
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
         model: page.tasks
         ScrollBar.vertical: ScrollBar {}
         section.property: "section"
-        section.delegate: Label {
-            required property string section
-            topPadding: Kirigami.Units.largeSpacing
-            bottomPadding: Kirigami.Units.smallSpacing
-            leftPadding: Kirigami.Units.smallSpacing
-            text: section
-            font.weight: 650
-        }
-        delegate: ItemDelegate {
+        // Section courante collée en haut pendant le défilement.
+        section.labelPositioning: ViewSection.InlineLabels | ViewSection.CurrentLabelAtStart
+        section.delegate: SectionHeader {}
+        // Même ligne que partout ailleurs (fond léger au survol, même
+        // hauteur) ; un clic ouvre le détail. Nom, état en étiquette, heure.
+        delegate: ClickableRow {
+            id: jrow
             required property var modelData
-            width: ListView.view.width
-            // Place pour la barre de défilement.
-            rightPadding: Kirigami.Units.gridUnit
-            onClicked: page.opened = modelData.id
-            // Nom de l'action, son état en étiquette colorée, l'heure à
-            // droite.
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.largeSpacing
-                Label {
-                    text: modelData.title
-                }
-                Tag {
-                    text: modelData.stateText || page.stateWord(modelData.state)
-                    tinted: true
-                    tint: window.stateColor(modelData.state)
-                }
-                Item { Layout.fillWidth: true }
-                // Heure, ou étape / avancement pour une action en cours.
-                Label {
-                    text: modelData.state === "running" && modelData.detail === "en cours" ? "" : modelData.detail
-                    opacity: 0.7
-                }
+            width: ListView.view.width - Kirigami.Units.gridUnit
+            x: Kirigami.Units.smallSpacing
+            onClicked: page.opened = jrow.modelData.id
+            Label { text: jrow.modelData.title }
+            Tag {
+                text: jrow.modelData.stateText || page.stateWord(jrow.modelData.state)
+                tinted: true
+                tint: window.stateColor(jrow.modelData.state)
+            }
+            Item { Layout.fillWidth: true }
+            // Heure, ou étape / avancement pour une action en cours.
+            Label {
+                text: jrow.modelData.state === "running" && jrow.modelData.detail === "en cours" ? "" : jrow.modelData.detail
+                opacity: 0.7
             }
         }
     }
 
-    // Détail de l'action ouverte, avec retour à la liste.
-    RowLayout {
+    // Détail de l'action ouverte : une grande fenêtre par-dessus la liste,
+    // fermée par « Fermer » ou Échap (la liste reste où elle était).
+    Dialog {
+        id: detailDialog
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
         visible: page.current.length > 0
-        Layout.fillWidth: true
-        Button {
-            flat: true
-            icon.name: "go-previous-symbolic"
-            text: "Journal"
-            onClicked: page.opened = ""
+        onClosed: page.opened = ""
+        width: window.width - 2 * Kirigami.Units.gridUnit
+        height: window.height - 2 * Kirigami.Units.gridUnit
+        padding: Kirigami.Units.largeSpacing * 1.5
+        footer: DialogButtonBox {
+            padding: Kirigami.Units.largeSpacing * 1.5
+            topPadding: 0
+            Button {
+                text: "Fermer"
+                DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
+            }
         }
-        Item { Layout.fillWidth: true }
-    }
-        StackLayout {
-            visible: page.current.length > 0
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            // Même retrait que les lignes de la liste.
-            Layout.leftMargin: Kirigami.Units.smallSpacing
-            Layout.rightMargin: Kirigami.Units.smallSpacing
+        contentItem: StackLayout {
             currentIndex: page.current === "prebuild" ? 1 : page.current.startsWith("check") ? 2 : page.current === "flatpak" ? 3
                         : page.current.startsWith("run:") ? 0
                         : page.current.startsWith("h:") ? 4 : 0
@@ -321,7 +316,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Kirigami.Units.smallSpacing
                     DetailHeader {
-                        title: "Construction de la nouvelle génération"
+                        title: "Préparation Nix"
                         subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale")
                                 : page.result.time ? window.when(page.result.time) : ""
                     }
@@ -382,7 +377,7 @@ ColumnLayout {
                 spacing: Kirigami.Units.largeSpacing
                 property string log: ""
                 DetailHeader {
-                    title: "Mise à jour des Flatpaks"
+                    title: "Mise à jour Flatpak"
                     subtitle: page.fp.active ? "en cours" : page.fp.started ? "lancée " + window.when(page.fp.started) : ""
                 }
                 MonoText {
@@ -471,10 +466,8 @@ ColumnLayout {
                                 text: "Revenir à la précédente (n° " + (modelData.g.prev ? modelData.g.prev.number : "") + ")"
                                 onClicked: {
                                     const n = modelData.g.prev.number, kind = modelData.kind;
-                                    window.ask("Revenir à la génération " + n + " ?",
-                                        kind === "system"
-                                            ? "Le système est réactivé dans l'état de cette génération. Une prochaine mise à jour reviendra à la configuration actuelle."
-                                            : "Home Manager est réactivé dans l'état de cette génération. Une prochaine mise à jour reviendra à la configuration actuelle.",
+                                    window.ask("Génération " + (kind === "system" ? "système " : "utilisateur ") + n,
+                                        "Réactivation de la configuration " + (kind === "system" ? "système" : "utilisateur") + " précédente (génération " + n + ").",
                                         () => kind === "system" ? backend.rollbackSystem(n) : backend.rollbackHome(n));
                                 }
                             }
@@ -487,4 +480,5 @@ ColumnLayout {
                 }
             }
         }
+    }
 }

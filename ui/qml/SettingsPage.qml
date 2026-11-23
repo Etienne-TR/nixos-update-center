@@ -38,7 +38,7 @@ ScrollView {
         enabledBox.checked = r.enabled === true;
         flakeBox.checked = r.flakeUpdate !== false;
         flatpakBox.checked = r.flatpak === true;
-        notifyBox.checked = r.notify !== false;
+        notifyBox.checked = r.notify === true;
         const p = parse(r.calendar || "");
         advanced.checked = p === null && !!r.calendar;
         advancedField.text = r.calendar || "";
@@ -129,7 +129,7 @@ ScrollView {
             }
             CheckBox {
                 id: notifyBox
-                text: "Notifier quand des mises à jour sont disponibles"
+                text: "Notifier quand la routine a trouvé des mises à jour (sinon : icône du tray)"
             }
         }
 

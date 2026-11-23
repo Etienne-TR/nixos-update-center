@@ -95,25 +95,98 @@ ApplicationWindow {
 
 
     // Confirmation avant une action lourde (arrêt, retour arrière).
+    // Titre court, détails dessous, bouton de confirmation qui dit l'action ;
+    // pas de croix (Échap ou Annuler).
     Dialog {
         id: confirm
         property var action
         property alias message: confirmText.text
+        property string confirmLabel: "Confirmer"
         anchors.centerIn: parent
         modal: true
-        width: Math.min(window.width - 40, 460)
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        Label {
+        width: Math.min(window.width - 40, 480)
+        padding: Kirigami.Units.largeSpacing * 2
+        header: Label {
+            text: confirm.title
+            font.weight: 650
+            font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.2
+            padding: Kirigami.Units.largeSpacing * 2
+            bottomPadding: 0
+        }
+        contentItem: Label {
             id: confirmText
-            width: parent.width
             wrapMode: Text.WordWrap
+        }
+        footer: DialogButtonBox {
+            padding: Kirigami.Units.largeSpacing * 2
+            topPadding: 0
+            Button {
+                text: confirm.confirmLabel
+                highlighted: true
+                DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
+            }
+            Button {
+                text: "Annuler"
+                DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
+            }
         }
         onAccepted: action()
     }
-    function ask(title, message, action) {
+    // Fiche d'une ligne (entrée du flake, Flatpak, version) : titre, infos,
+    // et ses actions en bas (Fermer en dernier). Remplace les menus de ligne.
+    Dialog {
+        id: info
+        property alias message: infoText.text
+        property var actions: []
+        anchors.centerIn: parent
+        modal: true
+        width: Math.min(window.width - 40, 480)
+        padding: Kirigami.Units.largeSpacing * 2
+        header: Label {
+            text: info.title
+            font.weight: 650
+            font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.2
+            padding: Kirigami.Units.largeSpacing * 2
+            bottomPadding: 0
+            elide: Text.ElideRight
+        }
+        contentItem: Label {
+            id: infoText
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+        }
+        footer: RowLayout {
+            spacing: Kirigami.Units.smallSpacing
+            Item { Layout.fillWidth: true; Layout.leftMargin: Kirigami.Units.largeSpacing * 2 }
+            Repeater {
+                model: info.actions
+                Button {
+                    required property var modelData
+                    text: modelData.text
+                    enabled: modelData.enabled !== false
+                    onClicked: { info.close(); modelData.run(); }
+                }
+            }
+            Button {
+                text: "Fermer"
+                Layout.rightMargin: Kirigami.Units.largeSpacing * 2
+                Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
+                onClicked: info.close()
+            }
+        }
+    }
+    function showInfo(title, message, actions) {
+        info.title = title;
+        info.message = message;
+        info.actions = actions || [];
+        info.open();
+    }
+
+    function ask(title, message, action, confirmLabel) {
         confirm.title = title;
         confirm.message = message;
         confirm.action = action;
+        confirm.confirmLabel = confirmLabel || "Confirmer";
         confirm.open();
     }
 
@@ -247,11 +320,19 @@ ApplicationWindow {
                     value: Math.max(0, strip.progress)
                 }
                 // Actions selon le type.
+                // Bascule de vitesse : grisée en priorité minimale, en couleur
+                // d'accent à pleine vitesse ; un clic change de mode.
                 IconAction {
-                    visible: strip.kind === "prebuild" && !backend.prebuild.boosted
-                    iconName: "media-seek-forward"
-                    tooltip: "Passer à pleine vitesse (la construction tourne en priorité minimale)"
-                    onClicked: backend.boostPrebuild()
+                    visible: strip.kind === "prebuild"
+                    // Profils d'énergie d'Adwaita (hérités par Pop) : économie
+                    // = priorité minimale, performance = pleine vitesse.
+                    iconName: backend.prebuild.boosted === true ? "power-profile-performance-symbolic" : "power-profile-power-saver-symbolic"
+                    fallbackName: "media-seek-forward-symbolic"
+                    highlighted: backend.prebuild.boosted === true
+                    tooltip: backend.prebuild.boosted === true
+                        ? "Pleine vitesse : cliquer pour revenir en priorité minimale"
+                        : "Priorité minimale : cliquer pour passer à pleine vitesse"
+                    onClicked: backend.boostPrebuild(backend.prebuild.boosted !== true)
                 }
                 IconAction {
                     visible: strip.kind === "prebuild"
@@ -271,8 +352,8 @@ ApplicationWindow {
                     tooltip: strip.kind === "run" ? "Arrêter la mise à jour (système et utilisateur)" : "Arrêter"
                     onClicked: {
                         if (strip.kind === "run")
-                            window.ask("Arrêter la mise à jour ?",
-                                "L'étape en cours est interrompue. Une activation du système déjà lancée va quand même au bout.",
+                            window.ask("Arrêt de la mise à jour",
+                                "L'étape en cours est interrompue, et la mise à jour utilisateur qui suit n'aura pas lieu. Une activation du système déjà lancée va quand même au bout.",
                                 () => backend.stopRun());
                         else if (strip.kind === "prebuild") backend.stopPrebuild();
                         else if (strip.kind === "flatpak") backend.stopFlatpak();
@@ -292,6 +373,27 @@ ApplicationWindow {
                     onClicked: window.expandedStrip = strip.expanded ? "" : strip.taskId
                 }
             }
+        }
+    }
+    // Libellé homogène d'un bandeau : « Carte · action », la carte de
+    // l'onglet Mises à jour concernée d'abord.
+    function stripLabel(t) {
+        const id = t.part ? t.part.id : t.id === "flatpak" ? ((backend.flatpakRun.parts || [])[0] || {}).id || "flatpak" : t.id;
+        const label = (t.part || (backend.flatpakRun.parts || [])[0] || {}).label || "";
+        const one = /\((.*)\)$/.exec(label);
+        switch (id) {
+        case "prebuild": return "Préparation · construction Nix";
+        case "flatpak_download": return "Préparation · téléchargement Flatpak";
+        case "system": return "Configuration Nix · mise à jour système";
+        case "home": return "Configuration Nix · mise à jour utilisateur";
+        case "flake": return "Mise à jour du flake · adoption" + (one ? " de " + one[1].split(" ").join(", ") : "");
+        case "flatpak": return "Flatpaks · mise à jour" + (one ? " de " + one[1] : "");
+        case "rollback_system": case "rollback_home": return "Versions · " + label.charAt(0).toLowerCase() + label.slice(1);
+        case "check:config": case "check:system": case "check:home": return "Configuration Nix · vérification";
+        case "check:flake": return "Mise à jour du flake · recherche";
+        case "check:nix": return "Configuration Nix et Mise à jour du flake · recherche";
+        case "check:flatpak": return "Flatpaks · recherche";
+        default: return t.title || id;
         }
     }
     // Avancement de la construction pendant une mise à jour.
@@ -320,7 +422,7 @@ ApplicationWindow {
                 opacity: active ? 1 : 0.6
                 readonly property bool paused: (modelData.id === "prebuild" && backend.prebuild.paused === true)
                                              || (modelData.id === "flatpak" && backend.flatpakPaused)
-                text: modelData.title
+                text: window.stripLabel(modelData)
                       + (paused ? " · en pause"
                          : modelData.state === "pending" ? " · en attente"
                          : modelData.detail ? " · " + modelData.detail : "")
@@ -334,16 +436,18 @@ ApplicationWindow {
         Repeater {
             // Recherches : Nix (une à la fois affichée) et Flatpak.
             model: (window.checking ? [{ id: "check:" + window.nixChecks[0], title:
-                        ({ system: "Vérification du système", home: "Vérification de l'utilisateur",
-                           config: "Vérification de la configuration", flake: "Recherche des nouvelles versions du flake" }[window.nixChecks[0]]
-                         || "Recherche des mises à jour") }] : [])
-                   .concat(backend.pendingParts.includes("flatpak") ? [{ id: "check:flatpak", title: "Recherche des mises à jour Flatpak" }] : [])
+                        // Le nom de la carte concernée, pour s'y retrouver.
+                        ({ system: "Vérification : Configuration Nix (système)", home: "Vérification : Configuration Nix (utilisateur)",
+                           config: "Vérification : Configuration Nix", flake: "Recherche : Mise à jour du flake",
+                           nix: "Recherche : Configuration Nix et Mise à jour du flake" }[window.nixChecks[0]]
+                         || "Recherche : Configuration Nix et Mise à jour du flake") }] : [])
+                   .concat(backend.pendingParts.includes("flatpak") ? [{ id: "check:flatpak", title: "Recherche : Flatpaks" }] : [])
             StatusStrip {
                 required property var modelData
                 taskId: modelData.id
                 kind: "check"
                 inJournal: false
-                text: modelData.title + "…"
+                text: window.stripLabel(modelData) + "…"
             }
         }
     }
