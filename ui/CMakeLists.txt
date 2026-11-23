@@ -29,6 +29,9 @@ qt_add_qml_module(${APP_NAME}-ui
     qml/MenuEntry.qml
     qml/LineMenu.qml
     qml/SegmentedToggle.qml
+    qml/SplitButton.qml
+    qml/ClickableRow.qml
+    qml/SectionHeader.qml
     qml/Tag.qml
     qml/IconAction.qml
     qml/Card.qml
