@@ -81,8 +81,12 @@ class Backend : public QObject {
   // Cette partie (system, home, config, flake, flatpak) est-elle en cours
   // de vérification (seule ou dans une complète) ?
   Q_INVOKABLE bool checking(const QString &part) const {
-    return m_pendingParts.contains(part) || m_pendingParts.contains("all") ||
-           (part == "config" && (m_pendingParts.contains("system") || m_pendingParts.contains("home")));
+    if (m_pendingParts.contains(part) || m_pendingParts.contains("all")) return true;
+    // « nix » couvre la config et le flake ; « all » : la recherche complète
+    // (les deux, Nix et Flatpak).
+    if (part == "all") return m_pendingParts.contains("nix") || m_pendingParts.contains("flatpak");
+    if (part != "flatpak" && m_pendingParts.contains("nix")) return true;
+    return part == "config" && (m_pendingParts.contains("system") || m_pendingParts.contains("home"));
   }
   int pendingCount() const;
   QVariantList history() const { return m_history; }
@@ -113,7 +117,8 @@ class Backend : public QObject {
   Q_INVOKABLE void stopRun();
   Q_INVOKABLE void startPrebuild();
   Q_INVOKABLE void stopPrebuild();
-  Q_INVOKABLE void boostPrebuild();
+  // Pleine vitesse (true) ou retour en priorité minimale (false).
+  Q_INVOKABLE void boostPrebuild(bool boost = true);
   // Pause / reprise de la construction (gel de l'unité).
   Q_INVOKABLE void pausePrebuild(bool paused);
   Q_INVOKABLE void openPrebuildJournal();

@@ -384,7 +384,7 @@ void Backend::updateInput(const QString &name) { startUpdate({"--flake-input", n
 void Backend::stopRun() { QProcess::startDetached(QStringLiteral(APP_NAME), {"--stop"}); }
 void Backend::startPrebuild() { engine({"start-prebuild"}); }
 void Backend::stopPrebuild() { engine({"stop-prebuild"}); }
-void Backend::boostPrebuild() { engine({"boost"}); }
+void Backend::boostPrebuild(bool boost) { engine({boost ? "boost" : "slow"}); }
 void Backend::pausePrebuild(bool paused) { engine({paused ? "pause-prebuild" : "resume-prebuild"}); }
 // 400 dernières lignes du journal du service de préparation.
 void Backend::refreshPrebuildLog() {
@@ -446,7 +446,13 @@ void Backend::runPending(const QStringList &args) {
   p->start(m_engine, QStringList{"pending"} + args);
 }
 
-void Backend::refreshPending(bool quick) { runPending(quick ? QStringList{"--quick"} : QStringList{}); }
+// Recherche complète : deux actions indépendantes, Nix et Flatpak, en
+// parallèle.
+void Backend::refreshPending(bool quick) {
+  if (quick) return runPending({"--quick"});
+  runPending({"--only", "nix"});
+  runPending({"--only", "flatpak"});
+}
 
 void Backend::refreshPart(const QString &part) { runPending({"--only", part}); }
 
@@ -480,7 +486,11 @@ QString Backend::formatTime(double secs) const {
   QLocale fr(QLocale::French);
   if (t.date() == today) return "aujourd'hui à " + t.toString("HH:mm");
   if (t.date() == today.addDays(-1)) return "hier à " + t.toString("HH:mm");
-  return fr.toString(t, "d MMMM yyyy 'à' HH:mm");
+  // Cette semaine : le jour seul (« lundi à 12:05 ») ; sinon la date, sans
+  // l'année si c'est la même (« le 20 novembre à 12:05 »).
+  if (t.date() > today.addDays(-7)) return fr.toString(t, "dddd 'à' HH:mm");
+  if (t.date().year() == today.year()) return "le " + fr.toString(t, "d MMMM 'à' HH:mm");
+  return "le " + fr.toString(t, "d MMMM yyyy 'à' HH:mm");
 }
 
 QString Backend::formatBytes(double bytes) const {
