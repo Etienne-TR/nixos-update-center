@@ -842,6 +842,12 @@ cmd_boost() {
   sudo "$root_helper" boost
 }
 
+# Retour en priorité minimale après « boost ».
+cmd_slow() {
+  systemctl is-active --quiet "$prebuild_unit" || die "aucune préparation en cours"
+  sudo "$root_helper" slow
+}
+
 # Pause et reprise de la construction (gel de l'unité, par l'aide root).
 cmd_pause_prebuild() { sudo "$root_helper" pause; }
 cmd_resume_prebuild() { sudo "$root_helper" resume; }
@@ -994,18 +1000,41 @@ cmd_flatpak_pending() {
   local list="[]"
   echo "Recherche des mises à jour Flatpak (flatpak remote-ls --updates)…" >&2
   [ "$(cfg .flatpak)" != true ] || list=$(flatpak_updates)
+  # Versions proposées : connues avant même leur installation.
+  jq '[.[] | select(.commit != "" and .toVersion != "") | {key: .commit[0:12], value: .toVersion}] | from_entries' <<<"$list" |
+    flatpak_remember_versions
   echo "  $(count "$(jq length <<<"$list")" "mise à jour disponible" "mises à jour disponibles")" >&2
   jq -n --argjson f "$list" --argjson t "$(now)" '{flatpaks: $f, time: $t}' | write_json "$state/flatpaks.json"
 }
 
+# Nom d'une application Flatpak tel que l'affiche le menu d'applications :
+# Name (traduit) de la section principale de son raccourci (« Zen Browser »,
+# « Tor Browser »). Vide s'il n'y a pas de raccourci (runtime…).
+flatpak_desktop_name() {
+  local file="${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/exports/share/applications/$1.desktop"
+  [ -f "$file" ] || return 0
+  local lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+  lang="${lang%%.*}"
+  awk -F= -v full="$lang" -v short="${lang%%_*}" '
+    /^\[/ { main = ($0 == "[Desktop Entry]"); next }
+    !main { next }
+    $1 == "Name[" full "]" && !f { f = substr($0, index($0, "=") + 1) }
+    $1 == "Name[" short "]" && !s { s = substr($0, index($0, "=") + 1) }
+    $1 == "Name" && !n { n = substr($0, index($0, "=") + 1) }
+    END { print (f != "" ? f : s != "" ? s : n) }' "$file"
+}
+
 flatpak_updates() {
-  local id name branch version size origin ref installed idate rdate
+  local id name dname branch version size origin ref commit installed idate rdate
   # Séparateur non blanc : un champ vide (runtime sans version) ne doit pas
   # décaler les suivants.
-  flatpak remote-ls --updates --user --columns=application,name,branch,version,download-size,origin,ref 2>/dev/null |
+  flatpak remote-ls --updates --user --columns=application,name,branch,version,download-size,origin,ref,commit 2>/dev/null |
     tr '\t' '\037' |
-    while IFS=$'\037' read -r id name branch version size origin ref; do
+    while IFS=$'\037' read -r id name branch version size origin ref commit; do
       [ -n "$ref" ] || continue
+      # Nom du raccourci s'il y en a un, sinon celui de Flatpak.
+      dname=$(flatpak_desktop_name "$id")
+      [ -z "$dname" ] || name=$dname
       installed=$(flatpak info --user "$ref" 2>/dev/null)
       idate=$(sed -nE 's/^ *Date: (.*)$/\1/p' <<<"$installed" | head -n 1)
       rdate=$(flatpak remote-info --user "$origin" "$ref" 2>/dev/null | sed -nE 's/^ *Date: (.*)$/\1/p' | head -n 1)
@@ -1013,8 +1042,8 @@ flatpak_updates() {
         --arg from "$(sed -nE 's/^ *Version: (.*)$/\1/p' <<<"$installed" | head -n 1)" \
         --argjson fromDate "$( [ -n "$idate" ] && date -d "$idate" +%s || echo null)" \
         --argjson toDate "$( [ -n "$rdate" ] && date -d "$rdate" +%s || echo null)" \
-        --arg ref "$ref" \
-        '{id: $id, name: $name, branch: $branch, ref: $ref, fromVersion: $from, toVersion: $to, size: $size,
+        --arg ref "$ref" --arg commit "$commit" \
+        '{id: $id, name: $name, branch: $branch, ref: $ref, commit: $commit, fromVersion: $from, toVersion: $to, size: $size,
           fromDate: $fromDate, toDate: $toDate}'
     done | jq -s .
 }
@@ -1039,7 +1068,7 @@ cmd_pending() {
   # Ce qui est vérifié : tout (défaut), rien d'autre que git (--quick), ou
   # une seule partie (--only system|home|config|flake|flatpak ; config : les deux premières) ; le reste est
   # repris de la dernière vérification.
-  local do_sys=1 do_home=1 do_flake=1 do_flatpak=1 do_claude=1
+  local do_sys=1 do_home=1 do_flake=1 do_flatpak=1 do_claude=1 full_nix=""
   # Flatpaks seuls : sans le verrou de pending.json.
   if [ "${1:-}" = --only ] && [ "${2:-}" = flatpak ]; then
     cmd_flatpak_pending
@@ -1053,9 +1082,12 @@ cmd_pending() {
         system) do_sys=1 ;;
         home) do_home=1 do_claude=1 ;;
         config) do_sys=1 do_home=1 do_claude=1 ;;
+        # Tout Nix (config et flake), sans Flatpak : la recherche complète
+        # de l'interface lance « nix » et « flatpak » en parallèle.
+        nix) do_sys=1 do_home=1 do_flake=1 do_claude=1 full_nix=1 ;;
         flake) do_flake=1 ;;
         flatpak) do_flatpak=1 ;;
-        *) die "partie inconnue : ${2:-} (system, home, config, flake, flatpak)" ;;
+        *) die "partie inconnue : ${2:-} (system, home, config, nix, flake, flatpak)" ;;
       esac
       ;;
   esac
@@ -1066,7 +1098,7 @@ cmd_pending() {
   exec 8>"$state/pending.lock"
   flock 8
   rm -f "$state/pending-errors.tmp"
-  local sys_changed=null home_changed=null upstream="[]" upstream_ok=false
+  local sys_changed=null home_changed=null upstream="[]" upstream_ok=false upstream_time=0
   local built_sys built_home
   # Vérifiée souvent : rattrape aussi une exécution interrompue.
   recover_interrupted
@@ -1170,6 +1202,7 @@ cmd_pending() {
       | [.upstream.inputs[]? | select(.from.rev == ($L.nodes[$L.nodes.root.inputs[.name] // ""].locked.rev // ""))]' \
       "$prev" 2>/dev/null || echo "[]")
     upstream_ok=$(jq -c '.upstream.checked // false' "$prev" 2>/dev/null || echo false)
+    upstream_time=$(jq -c '.upstream.time // 0' "$prev" 2>/dev/null || echo 0)
     claude=$(jq -c '.claudeDesktop // null' "$prev" 2>/dev/null || echo null)
   fi
 
@@ -1177,7 +1210,7 @@ cmd_pending() {
   [ -z "$do_flake" ] || echo "Recherche des nouvelles versions des entrées du flake (nix flake update à blanc)…" >&2
   if [ -n "$do_flake" ] && (cd "$flake" && nix flake update --output-lock-file "$tmp/new.lock" >/dev/null 2>&1); then
     upstream=$(lock_diff "$cur" "$tmp/new.lock")
-    upstream_ok=true
+    upstream_ok=true upstream_time=$(now)
     echo "  $(count "$(jq length <<<"$upstream")" "nouvelle version en ligne" "nouvelles versions en ligne")" >&2
   fi
 
@@ -1219,7 +1252,7 @@ cmd_pending() {
 
   local full_time
   full_time=$(now)
-  [ -z "$pending_quick" ] || full_time=$(jq '.time // 0' "$prev" 2>/dev/null || echo 0)
+  [ -z "$pending_quick" ] || [ -n "${full_nix:-}" ] || full_time=$(jq '.time // 0' "$prev" 2>/dev/null || echo 0)
   jq -n --argjson time "$full_time" --argjson quickTime "$(now)" \
     --argjson quick "$([ -n "$pending_quick" ] && echo true || echo false)" \
     --argjson sysc "$sys_changed" --argjson homec "$home_changed" \
@@ -1227,7 +1260,7 @@ cmd_pending() {
     --argjson pkgsys "$pkgs_sys" --argjson pkghome "$pkgs_home" \
     --arg tsys "$target_sys" --arg thome "$target_home" --arg head "$head" --arg dirty "$dirty_hash" \
     --arg sysb "$built_sys" --arg homeb "$built_home" \
-    --argjson upstream "$upstream" --argjson upok "$upstream_ok" \
+    --argjson upstream "$upstream" --argjson uptime "$upstream_time" --argjson upok "$upstream_ok" \
     --argjson claude "$claude" --argjson unpushed "$unpushed" --argjson uncommitted "$uncommitted" --argjson uncommittedTimes "$uncommitted_times" \
     --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
     { time: $time, quickTime: $quickTime, quick: $quick, head: $head, dirtyHash: $dirty,
@@ -1237,7 +1270,7 @@ cmd_pending() {
         system: ({changed: $sysc, built: ($sysb != "" and $sysb == $tsys), target: $tsys, packages: $pkgsys} + $sysch),
         home: ({changed: $homec, built: ($homeb != "" and $homeb == $thome), target: $thome, packages: $pkghome} + $homech),
         flake: ($flakech | {commits, dirty}) },
-      upstream: {checked: $upok, inputs: $upstream},
+      upstream: {checked: $upok, inputs: $upstream, time: $uptime},
       claudeDesktop: $claude, unpushed: $unpushed,
       uncommitted: $uncommitted, uncommittedTimes: $uncommittedTimes, errors: $errors }' |
     tee "$state/pending.json.tmp"
@@ -1271,18 +1304,54 @@ cmd_generations() {
 # le journal de flatpak (commits complets, contrairement à `flatpak
 # history`) : chaque déploiement, du plus ancien au plus récent, avec
 # « current » pour le commit installé maintenant.
+# Numéros de version des Flatpaks, par commit (12 premiers caractères),
+# gardés dans flatpak-versions.json : le journal de flatpak ne donne que les
+# commits. Complété sans réseau par les applications installées (à chaque
+# lecture des versions) et par la recherche de mises à jour (versions
+# téléchargées ou proposées). Entrée : objet JSON {commit: version}.
+flatpak_remember_versions() {
+  local f="$state/flatpak-versions.json" old="{}"
+  mkdir -p "$state"
+  [ ! -s "$f" ] || old=$(cat "$f")
+  jq --argjson old "$old" '$old + .' | write_json "$f"
+}
+
 flatpak_versions() {
   [ "$(cfg .flatpak)" = true ] || { echo "[]" && return; }
-  local installed
-  installed=$(flatpak list --user --app --columns=ref,active 2>/dev/null |
-    jq -R 'split("\t") | {key: ("app/" + .[0]), value: .[1]}' | jq -s 'from_entries')
+  # Applications installées : commit actif et nom affiché (celui du menu
+  # d'applications, « Zen Browser »).
+  local installed ref active name dname dir
+  installed=$(flatpak list --user --app --columns=ref,active,name 2>/dev/null |
+    while IFS=$'\t' read -r ref active name; do
+      dname=$(flatpak_desktop_name "${ref%%/*}")
+      # Déploiement actif : son dossier porte le commit complet, sa date
+      # celle de l'installation (pour une application sans trace récente
+      # dans le journal).
+      dir=$(readlink -f "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/app/$ref/active" 2>/dev/null || true)
+      jq -n --arg k "app/$ref" --arg a "$active" --arg n "${dname:-$name}" --arg c "${dir##*/}" \
+        --argjson t "$( [ -n "$dir" ] && stat -c %Y "$dir" || echo 0)" \
+        '{key: $k, value: {active: $a, name: $n, commit: $c, time: $t}}'
+    done | jq -s 'from_entries')
+  flatpak list --user --app --columns=active,version 2>/dev/null |
+    jq -R 'split("\t") | select((.[1] // "") != "") | {key: .[0][0:12], value: .[1]}' | jq -s 'from_entries' |
+    flatpak_remember_versions
+  local known
+  known=$(cat "$state/flatpak-versions.json" 2>/dev/null || echo "{}")
   journalctl -o json --no-pager --since "-90 days" MESSAGE_ID=c7b39b1e006b464599465e105b361485 2>/dev/null |
-    jq -c --argjson inst "$installed" '
+    jq -c --argjson inst "$installed" --argjson known "$known" '
       select(.INSTALLATION == "user" and (.OPERATION | startswith("deploy")) and (.REF | startswith("app/")))
       | {time: ((.__REALTIME_TIMESTAMP | tonumber) / 1000000 | floor), ref: .REF,
-         app: (.REF | split("/")[1]), commit: .COMMIT, old: (.OLD_COMMIT // ""),
-         operation: .OPERATION, current: (($inst[.REF] // "") as $a | $a != "" and (.COMMIT | startswith($a)))}' |
-    jq -s .
+         app: (.REF | split("/")[1]), name: ($inst[.REF].name // ""), commit: .COMMIT, old: (.OLD_COMMIT // ""),
+         version: ($known[.COMMIT[0:12]] // ""), operation: .OPERATION, current: (($inst[.REF].active // "") as $a | $a != "" and (.COMMIT | startswith($a)))}' |
+    # Applications installées dont la version actuelle n'est plus dans le
+    # journal (installées il y a plus de 90 jours) : ajoutées d'après leur
+    # déploiement.
+    jq -s --argjson inst "$installed" --argjson known "$known" '
+      . as $h
+      | $h + [$inst | to_entries[] | select(.key as $r | ($h | any(.ref == $r and .current)) | not)
+              | {time: .value.time, ref: .key, app: (.key | split("/")[1]), name: .value.name,
+                 commit: .value.commit, old: "", version: ($known[.value.active] // ""),
+                 operation: "deploy", current: true}]'
 }
 
 # ─────────────────────────── weekly ───────────────────────────
@@ -1329,6 +1398,10 @@ cmd_weekly() { # --manual : lancée depuis l'interface, même si désactivée
   fi
   cmd_check || rc=$?
   [ "$rc" -eq 0 ] || exit 0
+  # Lancée depuis l'interface (Adopter) : pas de notification, on y est
+  # déjà. Routine : seulement si demandé (l'icône du tray suit déjà la
+  # préparation).
+  [ "${1:-}" != --manual ] || exit 0
   [ "$(cfg .routine.notify)" = true ] || exit 0
   # -t 0 : sinon noctalia retire la popup sans signal et le bouton n'existe
   # plus dans l'historique (notify-send attendrait sans fin).
@@ -1462,6 +1535,7 @@ case "$cmd" in
   boost) cmd_boost ;;
   start-prebuild) cmd_start_prebuild ;;
   stop-prebuild) cmd_stop_prebuild ;;
+  slow) cmd_slow ;;
   pause-prebuild) cmd_pause_prebuild ;;
   resume-prebuild) cmd_resume_prebuild ;;
   *) die "sous-commande inconnue : ${cmd:-(aucune)} (run, prebuild, pending, generations, weekly, news, boost)" ;;

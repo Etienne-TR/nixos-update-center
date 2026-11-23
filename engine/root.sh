@@ -54,6 +54,19 @@ case "${1:-}" in
     touch "/run/$NAME/boosted"
     echo "Préparation à pleine vitesse."
     ;;
+  slow)
+    # Retour en priorité minimale (celle du service) après « boost ».
+    procs="/sys/fs/cgroup/system.slice/$NAME-prebuild.service/cgroup.procs"
+    [ -r "$procs" ] || { echo "aucune préparation en cours" >&2 && exit 1; }
+    /run/current-system/sw/bin/systemctl set-property --runtime "$NAME-prebuild.service" CPUWeight=1 IOWeight=1
+    while read -r pid; do
+      chrt --all-tasks --idle --pid 0 "$pid" 2>/dev/null || true
+      renice -n 19 -p "$pid" >/dev/null 2>&1 || true
+      ionice -c 3 -p "$pid" 2>/dev/null || true
+    done <"$procs"
+    rm -f "/run/$NAME/boosted"
+    echo "Préparation en priorité minimale."
+    ;;
   pause | resume)
     # Pause de la construction : gel de son unité (cgroup), compilations
     # comprises (elles tournent dans l'unité, store local, sans le démon).
@@ -70,7 +83,7 @@ case "${1:-}" in
     fi
     ;;
   *)
-    echo "usage : $NAME-root switch-to CHEMIN | switch-generation N | clean | boost | pause | resume" >&2
+    echo "usage : $NAME-root switch-to CHEMIN | switch-generation N | clean | boost | slow | pause | resume" >&2
     exit 2
     ;;
 esac

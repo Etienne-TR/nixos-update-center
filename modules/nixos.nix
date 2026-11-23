@@ -35,7 +35,7 @@ let
       calendar = cfg.schedule;
       flakeUpdate = true;
       flatpak = cfg.flatpak;
-      notify = true;
+      notify = false;
     };
     extras = {
       patchedPackages = lib.mapAttrsToList (n: p: {
