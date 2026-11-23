@@ -146,7 +146,7 @@ ScrollView {
                 onClicked: backend.startPrebuild()
                 ToolTip.visible: hovered
                 ToolTip.delay: 500
-                ToolTip.text: "nixos-update-center-engine start-prebuild : systemctl start nixos-update-center-prebuild, qui construit système et Home Manager sans les activer (nix build en priorité minimale) et télécharge les Flatpaks (flatpak update --no-deploy)."
+                ToolTip.text: "nixos-update-center-engine start-prebuild : systemctl start nixos-update-center-prebuild, qui construit système et Home Manager sans les activer (nix build en priorité minimale), et à part le téléchargement des Flatpaks (nixos-update-center-engine flatpak-update --download : flatpak update --no-deploy)."
             }
             ]
 
@@ -192,8 +192,11 @@ ScrollView {
             // État du dépôt git : fichiers modifiés (pas committés), avec
             // « nouveau » ou « supprimé » selon git, et commits non publiés.
             readonly property var files: (page.pending.uncommitted || []).map(f => {
-                const st = f.slice(0, 2);
-                return { text: f.slice(3), scope: st === "??" || st.includes("A") ? "nouveau" : st.includes("D") ? "supprimé" : "" };
+                const st = f.slice(0, 2), path = f.slice(3);
+                // Date de modification à droite (et « nouveau » / « supprimé »).
+                const t = (page.pending.uncommittedTimes || {})[path];
+                const kind = st === "??" || st.includes("A") ? "nouveau" : st.includes("D") ? "supprimé" : "";
+                return { text: path, kind: kind, time: t || 0 };
             })
             readonly property var lockInputs: {
                 const seen = {}, out = [];
@@ -249,7 +252,19 @@ ScrollView {
             }
             Repeater {
                 model: confCard.files
-                ListLine { required property var modelData; text: modelData.text; mono: false; scope: modelData.scope }
+                // « flake.nix  aujourd'hui à 12:14 » : la date en retrait,
+                // juste après le nom.
+                RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Label { text: modelData.text }
+                    Label {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        opacity: 0.7
+                        text: [modelData.kind, modelData.time ? window.when(modelData.time) : ""].filter(x => x).join(", ")
+                    }
+                }
             }
             Heading {
                 visible: confCard.unpushed.length > 0
@@ -293,9 +308,9 @@ ScrollView {
                 HoverHandler { id: installHover; cursorShape: installLine.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor }
                 // Comme les entrées : clic, menu sous le curseur.
                 TapHandler { enabled: installLine.clickable; onTapped: (point) => installMenu.popup(installLine, point.position.x, installLine.height) }
-                Menu {
+                LineMenu {
                     id: installMenu
-                    MenuItem {
+                    MenuEntry {
                         text: "Voir les paquets"
                         onTriggered: packagesDialog.open()
                     }
@@ -348,7 +363,7 @@ ScrollView {
                         Label {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                            opacity: 0.8
+                            opacity: 0.7
                             text: modelData.kind.startsWith("A") ? "ajouté" + (modelData.change !== "<none>" ? " (" + modelData.change + ")" : "")
                                 : modelData.kind.startsWith("R") ? "retiré"
                                 : modelData.change + (modelData.kind.startsWith("D") ? " (version plus ancienne)" : "")
@@ -474,15 +489,35 @@ ScrollView {
                 model: page.pending.flatpaks || []
                 // « GIMP  3.2.8 → 3.2.9 · 102,5 Mo (4 jours) » ; même version :
                 // nouvelle compilation.
+                // Ligne cliquable : menu « Mettre à jour cette application ».
                 RowLayout {
+                    id: fpRow
                     required property var modelData
+                    readonly property bool lit: fpRowHover.hovered && !fpCard.busy
                     Layout.fillWidth: true
-                    Label { text: modelData.name }
+                    HoverHandler { id: fpRowHover; cursorShape: fpCard.busy ? Qt.ArrowCursor : Qt.PointingHandCursor }
+                    TapHandler {
+                        enabled: !fpCard.busy
+                        onTapped: (point) => fpMenu.popup(fpRow, point.position.x, fpRow.height)
+                    }
+                    LineMenu {
+                        id: fpMenu
+                        MenuEntry {
+                            text: "Mettre à jour cette application"
+                            enabled: !fpCard.busy && !!fpRow.modelData.ref
+                            onTriggered: backend.startFlatpakUpdate([fpRow.modelData.ref])
+                        }
+                    }
+                    Label {
+                        text: modelData.name
+                        color: fpRow.lit ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                    }
                     Label {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
                         elide: Text.ElideRight
-                        opacity: 0.8
+                        opacity: fpRow.lit ? 1 : 0.7
+                        color: fpRow.lit ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
                         text: {
                             const m = modelData, parts = [];
                             if (m.fromVersion && m.toVersion)

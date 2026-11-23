@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
 // Avancement d'une partie de la mise à jour en cours, affiché dans sa
-// section de l'onglet En attente.
+// section de l'onglet Mises à jour.
 ColumnLayout {
     id: root
     // Partie : system, home, flatpak ou flake.

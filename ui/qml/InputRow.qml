@@ -27,54 +27,9 @@ RowLayout {
         enabled: row.clickable
         onTapped: (point) => menu.popup(row, point.position.x, row.height)
     }
-    // Entrée de menu au rendu commun (même alignement pour toutes).
-    component RowMenuItem: MenuItem {
-        id: item
-        // Marges égales à gauche et à droite, survol discret (fond teinté,
-        // texte inchangé).
-        leftPadding: Kirigami.Units.largeSpacing * 1.5
-        rightPadding: Kirigami.Units.largeSpacing * 1.5
-        topPadding: Kirigami.Units.smallSpacing * 1.5
-        bottomPadding: Kirigami.Units.smallSpacing * 1.5
-        // Hauteur du texte et des marges, sans le minimum du style : plus
-        // compact.
-        implicitHeight: contentItem.implicitHeight + topPadding + bottomPadding
-        // Centré verticalement : le style impose une hauteur minimale d'entrée,
-        // plus grande que texte + marges (sinon le texte reste en haut).
-        contentItem: Label {
-            verticalAlignment: Text.AlignVCenter
-            text: item.text
-            color: Kirigami.Theme.textColor
-            opacity: item.enabled ? 1 : 0.5
-        }
-        // Fond de survol en retrait du bord du menu.
-        background: Item {
-            Rectangle {
-                anchors.fill: parent
-                anchors.leftMargin: Kirigami.Units.smallSpacing
-                anchors.rightMargin: Kirigami.Units.smallSpacing
-                anchors.topMargin: 2
-                anchors.bottomMargin: 2
-                radius: Kirigami.Units.cornerRadius
-                color: item.highlighted && item.enabled ? Qt.alpha(Kirigami.Theme.highlightColor, 0.18) : "transparent"
-            }
-        }
-    }
-    Menu {
+    LineMenu {
         id: menu
-        topPadding: Kirigami.Units.smallSpacing
-        bottomPadding: Kirigami.Units.smallSpacing
-        // Largeur ajustée au texte le plus long (sinon largeur minimale du
-        // style, avec de la place vide à droite).
-        width: {
-            let w = 0;
-            for (let i = 0; i < count; ++i) {
-                const it = itemAt(i);
-                if (it && it.visible) w = Math.max(w, it.contentItem.implicitWidth + it.leftPadding + it.rightPadding);
-            }
-            return w + leftPadding + rightPadding;
-        }
-        RowMenuItem {
+        MenuEntry {
             visible: row.updatable
             height: visible ? implicitHeight : 0
             text: "Adopter l'entrée"
@@ -83,7 +38,7 @@ RowLayout {
         }
         // Comparaison entre les deux révisions (GitHub pour l'instant) ;
         // ↗ : lien vers le navigateur.
-        RowMenuItem {
+        MenuEntry {
             text: "Voir les changements ↗"
             enabled: row.url.length > 0
             onTriggered: Qt.openUrlExternally(row.url)
@@ -98,7 +53,7 @@ RowLayout {
     Label {
         Layout.fillWidth: true
         Layout.minimumWidth: 0
-        opacity: row.lit ? 1 : 0.8
+        opacity: row.lit ? 1 : 0.7  // même retrait que les dates des fichiers
         color: row.lit ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
         elide: Text.ElideMiddle
         text: row.label
