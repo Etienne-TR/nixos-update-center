@@ -1397,16 +1397,77 @@ cmd_weekly() { # --manual : lancée depuis l'interface, même si désactivée
     exit 0
   fi
   cmd_check || rc=$?
-  [ "$rc" -eq 0 ] || exit 0
-  # Lancée depuis l'interface (Adopter) : pas de notification, on y est
-  # déjà. Routine : seulement si demandé (l'icône du tray suit déjà la
-  # préparation).
+  # 3 : flake.lock inchangé, la préparation est lancée quand même ; 1 :
+  # échec (déjà notifié).
+  [ "$rc" -eq 0 ] || [ "$rc" -eq 3 ] || exit 0
+  # Lancée depuis l'interface : pas de notification, on y est déjà.
   [ "${1:-}" != --manual ] || exit 0
-  [ "$(cfg .routine.notify)" = true ] || exit 0
+  # Routine : une notification à la fin de chaque préparation, s'il y a
+  # quelque chose à installer (Flatpaks téléchargés, constructions Nix).
+  notify_flatpak_ready &
+  notify_nix_ready &
+  wait
+}
+
+# Attend la fin d'une unité (« --user » ou système).
+wait_unit() { # [--user] unité
+  local scope=()
+  [ "$1" != --user ] || { scope=(--user) && shift; }
+  sleep 5
+  while :; do
+    case "$(systemctl "${scope[@]}" is-active "$1" 2>/dev/null)" in
+      active | activating | reloading | deactivating) sleep 15 ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
+# Fin du téléchargement des Flatpaks de la routine : notification s'il y a
+# des mises à jour à installer (un échec est déjà notifié).
+notify_flatpak_ready() {
+  [ "$(cfg .flatpak)" = true ] && [ "$(cfg .routine.flatpak)" = true ] || return 0
+  wait_unit --user "$NAME-flatpak"
+  [ "$(jq -r '.state // ""' "$state/flatpak.json" 2>/dev/null)" = success ] || return 0
+  cmd_flatpak_pending >/dev/null 2>&1 || return 0
+  local n choice
+  n=$(jq '.flatpaks | length' "$state/flatpaks.json" 2>/dev/null || echo 0)
+  [ "$n" -gt 0 ] || return 0
   # -t 0 : sinon noctalia retire la popup sans signal et le bouton n'existe
   # plus dans l'historique (notify-send attendrait sans fin).
-  choice=$(notify software-update-available-symbolic "Mises à jour disponibles" \
-    "Préparation en cours en arrière-plan. Sinon, plus tard : @command@" \
+  choice=$(notify software-update-available-symbolic "Flatpaks prêts à installer" \
+    "$(count "$n" "mise à jour téléchargée" "mises à jour téléchargées")." \
+    -t 0 -A update="Mettre à jour" -A open="Détails") || true
+  case "$choice" in
+    update) systemd-run --user --collect --quiet --unit="$NAME-flatpak" --setenv=PATH="$PATH" "$0" flatpak-update || true ;;
+    open) systemd-run --user --collect --unit="$NAME-ui-open-$(now)" "$NAME-ui" --show || true ;;
+  esac
+}
+
+# Fin de la construction Nix de la routine : notification s'il y a une
+# nouvelle génération (système ou utilisateur) à activer, ou en cas d'échec.
+notify_nix_ready() {
+  wait_unit "$prebuild_unit"
+  local st n choice body
+  st=$(jq -r '.state // ""' "$prebuild_result" 2>/dev/null || true)
+  case "$st" in
+    success) ;;
+    failed)
+      notify dialog-error-symbolic "Préparation Nix en échec" "Voir le journal : onglet Journal" -t 0
+      return 0
+      ;;
+    *) return 0 ;;
+  esac
+  cmd_pending >/dev/null 2>&1 || return 0
+  local p="$state/pending.json"
+  [ "$(jq '(.system.changed == true) or (.home.changed == true)' "$p" 2>/dev/null)" = true ] || return 0
+  n=$(jq '[(.system | select(.changed == true) | .packages // [] | length),
+           (.home | select(.changed == true) | .packages // [] | length)] | add // 0' "$p")
+  if [ "$n" -gt 0 ]; then
+    body="$(count "$n" "paquet" "paquets") à installer."
+  else
+    body="Nouvelle configuration prête à activer."
+  fi
+  choice=$(notify software-update-available-symbolic "Mise à jour Nix prête" "$body" \
     -t 0 -A update="Mettre à jour" -A open="Détails") || true
   case "$choice" in
     update) open_update ;;
@@ -1426,6 +1487,11 @@ cmd_apply_settings() {
   else
     rm -f "$dir/settings.conf"
   fi
+  # Dernier passage daté de maintenant : sinon, avec Persistent, un
+  # horaire déjà dépassé depuis le dernier passage lancerait la routine
+  # tout de suite au redémarrage du minuteur.
+  local stamp="${XDG_DATA_HOME:-$HOME/.local/share}/systemd/timers/stamp-$NAME-weekly.timer"
+  [ ! -e "$stamp" ] || touch "$stamp"
   systemctl --user daemon-reload
   systemctl --user restart "$NAME-weekly.timer" 2>/dev/null || true
 }
@@ -1434,9 +1500,12 @@ cmd_apply_settings() {
 cmd_settings() {
   local next
   next=$(systemctl --user show "$NAME-weekly.timer" -P NextElapseUSecRealtime 2>/dev/null || true)
-  jq -n --argjson r "$(cfg '.routine' | jq -c .)" --arg next "$next" \
+  # Aussi en secondes, pour l'afficher en français dans l'interface.
+  local next_time=0
+  [ -z "$next" ] || [ "$next" = n/a ] || next_time=$(date -d "$next" +%s 2>/dev/null || echo 0)
+  jq -n --argjson r "$(cfg '.routine' | jq -c .)" --arg next "$next" --argjson nextTime "$next_time" \
     --argjson custom "$([ -r "$settings_file" ] && echo true || echo false)" \
-    '$r + {next: $next, custom: $custom}'
+    '$r + {next: $next, nextTime: $nextTime, custom: $custom}'
 }
 
 # Lance la mise à jour depuis un clic : dans l'interface si elle est

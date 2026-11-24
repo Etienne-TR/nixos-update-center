@@ -35,7 +35,6 @@ let
       calendar = cfg.schedule;
       flakeUpdate = true;
       flatpak = cfg.flatpak;
-      notify = false;
     };
     extras = {
       patchedPackages = lib.mapAttrsToList (n: p: {
@@ -299,8 +298,8 @@ in
       unitConfig.ConditionUser = cfg.user;
       timerConfig = {
         OnCalendar = cfg.schedule;
+        # Heure manquée (ordinateur éteint) : rattrapée au démarrage suivant.
         Persistent = true;
-        RandomizedDelaySec = "1h";
       };
     };
   };
