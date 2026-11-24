@@ -110,7 +110,11 @@ ApplicationWindow {
         property var action
         property alias message: confirmText.text
         property string confirmLabel: "Confirmer"
-        anchors.centerIn: parent
+        // Position verticale fixe (haut à hauteur constante), quelle que
+        // soit la hauteur du contenu : la fenêtre ne saute pas d'une fiche
+        // à l'autre.
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round(parent.height * 0.22)
         modal: true
         width: window.smallDialogWidth
         padding: Kirigami.Units.largeSpacing * 2
@@ -151,7 +155,11 @@ ApplicationWindow {
         id: info
         property alias message: infoText.text
         property var actions: []
-        anchors.centerIn: parent
+        // Position verticale fixe (haut à hauteur constante), quelle que
+        // soit la hauteur du contenu : la fenêtre ne saute pas d'une fiche
+        // à l'autre.
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round(parent.height * 0.22)
         modal: true
         width: window.smallDialogWidth
         padding: Kirigami.Units.largeSpacing * 2
@@ -187,6 +195,9 @@ ApplicationWindow {
                     Layout.rightMargin: index === info.actions.length - 1 ? Kirigami.Units.largeSpacing * 2 : 0
                     Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
                     text: modelData.text
+                    // Action principale (main) : icône et teinte d'accent.
+                    icon.name: modelData.icon || ""
+                    highlighted: modelData.main === true
                     enabled: modelData.enabled !== false
                     onClicked: { info.close(); modelData.run(); }
                 }
@@ -278,7 +289,7 @@ ApplicationWindow {
                 visible: tabs.currentIndex === 0
                 // Aligné sur les flèches des cartes : retrait intérieur des
                 // cartes (la marge de la fenêtre est commune).
-                Layout.rightMargin: Kirigami.Units.largeSpacing + 1
+                Layout.rightMargin: Kirigami.Units.largeSpacing * 2 + 1
                 iconName: "view-refresh-symbolic"
                 enabled: !backend.checking("all")
                 tooltip: "Tout vérifier (30 à 60 s) : configuration Nix, nouvelles versions en ligne, Flatpaks. Rien n'est modifié."
@@ -431,7 +442,7 @@ ApplicationWindow {
         case "system": return "Mise à jour système (NixOS)";
         case "home": return "Mise à jour utilisateur (Home Manager)";
         case "flake": return one ? "Adoption de " + one[1].split(" ").join(", ") + " dans le flake" : "Adoption de toutes les entrées du flake";
-        case "flatpak": return (one ? "Mise à jour de " + one[1] : "Mise à jour") + " (Flatpak)";
+        case "flatpak": return (one ? "Mise à jour de " + one[1].split(", ").map(window.flatpakName).join(", ") : "Mise à jour") + " (Flatpak)";
         case "rollback_system": case "rollback_home": {
             // Numéro de la génération, à la fin du libellé du moteur.
             const n = /(\d+)$/.exec(label || "");
@@ -445,6 +456,12 @@ ApplicationWindow {
         case "check:flatpak": return "Recherche (Flatpak)";
         default: return "";
         }
+    }
+    // Nom affiché d'une application Flatpak (celui du lanceur, « Pods »)
+    // d'après son identifiant ; l'identifiant s'il est inconnu.
+    function flatpakName(id) {
+        const f = ((backend.generations || {}).flatpak || []).find(x => x.app === id && x.name);
+        return f ? f.name : id;
     }
     function stripLabel(t) {
         const id = t.part ? t.part.id : t.id === "flatpak" ? ((backend.flatpakRun.parts || [])[0] || {}).id || "flatpak" : t.id;

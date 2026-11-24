@@ -26,7 +26,7 @@ ClickableRow {
         const actions = [];
         // Voir d'abord, adopter ensuite (action principale près de Fermer).
         if (row.url.length > 0) actions.push({ text: "Voir les changements ↗", run: () => Qt.openUrlExternally(row.url) });
-        if (row.updatable) actions.push({ text: "Adopter l'entrée", enabled: !window.running, run: () => backend.updateInput(i.name) });
+        if (row.updatable) actions.push({ text: "Adopter l'entrée", icon: "media-playback-start-symbolic", main: true, enabled: !window.running, run: () => backend.updateInput(i.name) });
         window.showInfo(i.name, lines.filter(x => x).join("\n"), actions);
     }
 

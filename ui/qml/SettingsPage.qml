@@ -6,6 +6,8 @@ import org.kde.kirigami as Kirigami
 // Réglages de la routine : écrits dans ~/.config/<nom>/settings.json par
 // dessus ceux de la configuration NixOS, appliqués sans rebuild.
 ScrollView {
+    ScrollBar.vertical: FlatScrollBar {}
+    ScrollBar.horizontal: FlatScrollBar {}
     id: page
     contentWidth: availableWidth
     clip: true
@@ -183,7 +185,7 @@ ScrollView {
             FlatButton {
                 visible: page.r.custom === true
                 text: "Revenir à la configuration par défaut"
-                icon.name: "edit-undo"
+                icon.name: "edit-undo-symbolic"
                 onClicked: { page.errorText = ""; backend.resetRoutine(); }
             }
         }

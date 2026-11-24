@@ -127,11 +127,14 @@ ColumnLayout {
     }
 
     ListView {
+        // Marge gauche dans la vue : le fond de survol des lignes y déborde
+        // sans être coupé.
+        leftMargin: Kirigami.Units.largeSpacing
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
         model: page.items
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: FlatScrollBar {}
         section.property: "section"
         // Section courante collée en haut pendant le défilement.
         section.labelPositioning: ViewSection.InlineLabels | ViewSection.CurrentLabelAtStart
@@ -141,8 +144,9 @@ ColumnLayout {
             id: line
             required property var modelData
             readonly property var it: modelData
-            width: ListView.view.width - Kirigami.Units.gridUnit
-            x: Kirigami.Units.smallSpacing
+            // Place pour le débord du fond de survol (et la barre de
+            // défilement à droite).
+            width: ListView.view.width - Kirigami.Units.gridUnit - 2 * Kirigami.Units.largeSpacing
             onClicked: page.opened = line.it.key
             Label { text: line.it.title }
             // Numéro de version (Flatpak), en plus clair.
@@ -194,9 +198,11 @@ ColumnLayout {
         }
         onClosed: page.opened = ""
         width: window.largeDialogWidth
-        // Hauteur fixe, moyenne (une quinzaine de versions), quel que soit
-        // leur nombre ; au plus celle des grandes fenêtres.
-        height: Math.min(window.largeDialogHeight, Kirigami.Units.gridUnit * 24)
+        // Hauteur fixe, basse (environ six versions, défilement au-delà),
+        // quel que soit leur nombre : le bouton reste près de la liste.
+        height: Math.min(window.largeDialogHeight,
+                         implicitHeaderHeight + implicitFooterHeight + topPadding + bottomPadding
+                         + Kirigami.Units.gridUnit * 1.6 * 6.5)
         padding: Kirigami.Units.largeSpacing * 2
         topPadding: Kirigami.Units.largeSpacing
         header: ColumnLayout {
@@ -235,6 +241,9 @@ ColumnLayout {
             }
         }
         contentItem: ListView {
+            // Marge gauche dans la vue : le fond de survol des lignes y déborde
+            // sans être coupé.
+            leftMargin: Kirigami.Units.largeSpacing
             id: historyList
             implicitHeight: contentHeight
             // Tab : liste, Annuler, puis l'action.
@@ -244,14 +253,13 @@ ColumnLayout {
             Keys.onDownPressed: history.move(1)
             clip: true
             model: history.versions
-            ScrollBar.vertical: ScrollBar {}
+            ScrollBar.vertical: FlatScrollBar {}
             delegate: ClickableRow {
                 id: hrow
                 required property var modelData
                 required property int index
                 readonly property var it: modelData
-                width: historyList.width - Kirigami.Units.gridUnit
-                x: Kirigami.Units.smallSpacing
+                width: historyList.width - Kirigami.Units.gridUnit - 2 * Kirigami.Units.largeSpacing
                 // L'actuelle ne se choisit pas (rien à faire).
                 clickable: !hrow.it.current
                 selected: history.chosen === hrow.index
@@ -297,6 +305,9 @@ ColumnLayout {
             }
             FlatButton {
                 id: actionButton
+                // Action principale : icône de retour arrière, teinte d'accent.
+                icon.name: "edit-undo-symbolic"
+                highlighted: true
                 KeyNavigation.tab: historyList
                 KeyNavigation.backtab: cancelButton
                 Keys.onReturnPressed: clicked()

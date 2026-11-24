@@ -124,22 +124,32 @@ ColumnLayout {
     readonly property var selectedEntry: (tasks.find(t => t.id === current) || {}).entry || null
 
     // En-tête du détail : titre et sous-titre.
-    component DetailHeader: RowLayout {
+    // Titre du détail, état et date à droite ; s'ils ne tiennent pas sur
+    // la ligne, ils passent dessous.
+    component DetailHeader: GridLayout {
+        id: dh
         property string title
         property string subtitle
+        readonly property bool narrow: titleLabel.implicitWidth + subLabel.implicitWidth + Kirigami.Units.gridUnit > width
         Layout.fillWidth: true
         Layout.minimumHeight: Kirigami.Units.gridUnit * 2
+        columns: narrow ? 1 : 2
+        rowSpacing: 0
         Label {
-            text: parent.title
+            id: titleLabel
+            Layout.fillWidth: dh.narrow
+            text: dh.title
+            wrapMode: Text.WordWrap
             font.bold: true
             font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.2
         }
         Label {
+            id: subLabel
             Layout.fillWidth: true
-            text: parent.subtitle
+            text: dh.subtitle
             opacity: 0.7
             elide: Text.ElideRight
-            horizontalAlignment: Text.AlignRight
+            horizontalAlignment: dh.narrow ? Text.AlignLeft : Text.AlignRight
         }
     }
 
@@ -182,11 +192,14 @@ ColumnLayout {
     }
     // Liste pleine largeur.
     ListView {
+        // Marge gauche dans la vue : le fond de survol des lignes y déborde
+        // sans être coupé.
+        leftMargin: Kirigami.Units.largeSpacing
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
         model: page.tasks
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: FlatScrollBar {}
         section.property: "section"
         // Section courante collée en haut pendant le défilement.
         section.labelPositioning: ViewSection.InlineLabels | ViewSection.CurrentLabelAtStart
@@ -196,8 +209,9 @@ ColumnLayout {
         delegate: ClickableRow {
             id: jrow
             required property var modelData
-            width: ListView.view.width - Kirigami.Units.gridUnit
-            x: Kirigami.Units.smallSpacing
+            // Place pour le débord du fond de survol (et la barre de
+            // défilement à droite).
+            width: ListView.view.width - Kirigami.Units.gridUnit - 2 * Kirigami.Units.largeSpacing
             onClicked: page.opened = jrow.modelData.id
             Label { text: jrow.modelData.title }
             Tag {

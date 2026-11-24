@@ -5,6 +5,8 @@ import org.kde.kirigami as Kirigami
 
 // Ce qui attend d'être installé, et la préparation en arrière-plan.
 ScrollView {
+    ScrollBar.vertical: FlatScrollBar {}
+    ScrollBar.horizontal: FlatScrollBar {}
     id: page
     contentWidth: availableWidth
     clip: true
@@ -340,7 +342,7 @@ ScrollView {
                     anchors.fill: parent
                     clip: true
                     model: confCard.packages
-                    ScrollBar.vertical: ScrollBar {}
+                    ScrollBar.vertical: FlatScrollBar {}
                     delegate: RowLayout {
                         required property var modelData
                         width: ListView.view.width
@@ -469,7 +471,7 @@ ScrollView {
                                  : m.toVersion ? "Version : " + m.toVersion + " (nouvelle compilation)" : "",
                              m.size ? "Téléchargement : " + m.size : "",
                              "Identifiant : " + m.id + " (" + m.branch + ")"].filter(x => x).join("\n"),
-                            [{ text: "Mettre à jour cette application", enabled: !fpCard.busy && !!m.ref,
+                            [{ text: "Mettre à jour cette application", icon: "media-playback-start-symbolic", main: true, enabled: !fpCard.busy && !!m.ref,
                                run: () => backend.startFlatpakUpdate([m.ref]) }]);
                     }
                     Label { text: fpRow.modelData.name }
