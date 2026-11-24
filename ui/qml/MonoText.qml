@@ -25,6 +25,8 @@ Rectangle {
 
     ScrollView {
         anchors.fill: parent
+        ScrollBar.vertical: FlatScrollBar {}
+        ScrollBar.horizontal: FlatScrollBar {}
 
         Flickable {
             id: flick

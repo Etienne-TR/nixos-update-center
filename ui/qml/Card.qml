@@ -12,7 +12,9 @@ Frame {
     property string badge
     property color badgeColor: Kirigami.Theme.textColor
     default property alias content: inner.data
-    padding: Kirigami.Units.largeSpacing
+    // Assez large pour que le fond de survol des lignes (qui déborde de
+    // largeSpacing) garde une marge avec le bord de la carte.
+    padding: Kirigami.Units.largeSpacing * 2
     // À plat, comme le reste : fond légèrement teinté, bordure discrète,
     // arrondi commun.
     background: Rectangle {

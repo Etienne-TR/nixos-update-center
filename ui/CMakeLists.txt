@@ -32,6 +32,7 @@ qt_add_qml_module(${APP_NAME}-ui
     qml/MultiToggle.qml
     qml/FlatButton.qml
     qml/FlatTab.qml
+    qml/FlatScrollBar.qml
     qml/SplitButton.qml
     qml/ClickableRow.qml
     qml/SectionHeader.qml

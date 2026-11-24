@@ -21,29 +21,35 @@ Item {
     implicitWidth: row.implicitWidth
     implicitHeight: Math.max(row.implicitHeight + Kirigami.Units.smallSpacing, minimumHeight)
 
-    // Fond de survol, débordant un peu à gauche et à droite : le texte reste
-    // aligné sur les titres.
+    // Débord du fond de survol à gauche et à droite : le texte reste aligné
+    // sur les titres, et le fond a sa marge autour du texte.
+    readonly property real overflow: Kirigami.Units.largeSpacing
     Rectangle {
-        x: -Kirigami.Units.smallSpacing
-        width: parent.width + 2 * Kirigami.Units.smallSpacing
+        x: -cr.overflow
+        width: parent.width + 2 * cr.overflow
         height: parent.height
         radius: Kirigami.Units.cornerRadius
         color: cr.selected ? Qt.alpha(Kirigami.Theme.highlightColor, 0.25)
              : cr.clickable && mouse.containsMouse ? Qt.alpha(Kirigami.Theme.textColor, 0.07) : "transparent"
-    }
-    // MouseArea plutôt que HoverHandler / TapHandler : ces derniers
-    // reçoivent aussi les clics et le survol à travers une fenêtre modale
-    // ouverte par-dessus (un clic dans la fenêtre cliquait la liste dessous).
-    MouseArea {
-        id: mouse
-        anchors.fill: parent
-        hoverEnabled: true
-        onClicked: (m) => { if (cr.clickable) cr.clicked(m.x); }
     }
     RowLayout {
         id: row
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
+    }
+    // Par-dessus le contenu (z) et sur tout le fond : le survol et le clic
+    // réagissent sur toute la ligne, pas seulement sur le texte. MouseArea
+    // plutôt que HoverHandler / TapHandler : ces derniers reçoivent aussi
+    // les clics et le survol à travers une fenêtre modale ouverte
+    // par-dessus.
+    MouseArea {
+        id: mouse
+        z: 1
+        x: -cr.overflow
+        width: parent.width + 2 * cr.overflow
+        height: parent.height
+        hoverEnabled: true
+        onClicked: (m) => { if (cr.clickable) cr.clicked(m.x - cr.overflow); }
     }
 }
