@@ -89,7 +89,8 @@ ColumnLayout {
     // étroite, pour ne pas imposer de largeur minimale.
     Flow {
         Layout.fillWidth: true
-        spacing: Kirigami.Units.smallSpacing
+        // Même écart entre filtres que dans le Journal.
+        spacing: Kirigami.Units.largeSpacing
         // Recherche en premier, même allure que les sélecteurs (fond teinté,
         // arrondi concentrique, même hauteur).
         Kirigami.SearchField {

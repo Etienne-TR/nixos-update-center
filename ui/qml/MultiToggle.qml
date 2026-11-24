@@ -12,13 +12,13 @@ Rectangle {
     // Valeurs choisies.
     property var values: []
     signal toggled(var values)
-    readonly property int pad: 3
+    readonly property int pad: 2
     implicitWidth: row.implicitWidth + 2 * pad
     implicitHeight: row.implicitHeight + 2 * pad
-    // Arrondi extérieur commun à toute l'appli (cornerRadius), pastille
-    // concentrique à l'intérieur : rayon extérieur moins la marge.
-    readonly property int innerRadius: Math.max(2, Math.round(Kirigami.Units.cornerRadius) - pad)
-    radius: Kirigami.Units.cornerRadius
+    // Contour à l'arrondi commun, pastille concentrique : cet arrondi
+    // moins la marge (écart régulier, coins compris).
+    readonly property int innerRadius: window.cornerRadius - pad
+    radius: window.cornerRadius
     color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
 
     Row {

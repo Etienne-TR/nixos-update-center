@@ -16,7 +16,7 @@ Button {
     implicitHeight: implicitContentHeight + topPadding + bottomPadding
     readonly property color base: b.highlighted ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
     background: Rectangle {
-        radius: Kirigami.Units.cornerRadius
+        radius: window.cornerRadius
         color: Qt.alpha(b.base, !b.enabled ? 0.05
                               : b.down ? (b.highlighted ? 0.40 : 0.18)
                               : b.hovered ? (b.highlighted ? 0.32 : 0.13)

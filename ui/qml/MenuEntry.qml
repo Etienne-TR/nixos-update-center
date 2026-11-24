@@ -31,7 +31,7 @@ MenuItem {
             anchors.rightMargin: Kirigami.Units.smallSpacing
             anchors.topMargin: 2
             anchors.bottomMargin: 2
-            radius: Kirigami.Units.cornerRadius
+            radius: window.cornerRadius
             color: item.highlighted && item.enabled ? Qt.alpha(Kirigami.Theme.highlightColor, 0.18) : "transparent"
         }
     }

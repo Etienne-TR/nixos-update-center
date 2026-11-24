@@ -8,6 +8,10 @@ ApplicationWindow {
     // Marge unique de la fenêtre : autour des onglets et autour du contenu
     // des onglets, la même partout.
     readonly property real margin: Kirigami.Units.largeSpacing * 1.5
+    // Arrondi unique des éléments (cartes, boutons, onglets, champs,
+    // sélecteurs, lignes survolées) ; les pastilles intérieures des
+    // sélecteurs sont concentriques (cet arrondi moins leur marge).
+    readonly property int cornerRadius: Math.round(Kirigami.Units.cornerRadius)
     // Dimensions communes des fenêtres par-dessus les onglets : petites
     // (fiche, confirmation) et grandes (listes, journaux).
     readonly property real smallDialogWidth: Math.min(width - 2 * Kirigami.Units.gridUnit, Kirigami.Units.gridUnit * 26)
@@ -295,8 +299,6 @@ ApplicationWindow {
                 Layout.rightMargin: Kirigami.Units.largeSpacing * 2 + 1
                 iconName: "view-refresh-symbolic"
                 enabled: !backend.checking("all")
-                tooltip: "Tout vérifier (30 à 60 s) : configuration Nix, nouvelles versions en ligne, Flatpaks. Rien n'est modifié."
-                    + (backend.pending.time ? "\nDernière recherche complète " + window.when(backend.pending.time) : "")
                 onClicked: backend.refreshPending()
             }
         }

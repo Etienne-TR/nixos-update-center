@@ -13,7 +13,7 @@ Label {
     rightPadding: Kirigami.Units.smallSpacing
     color: tinted ? tint : Kirigami.Theme.textColor
     background: Rectangle {
-        radius: Kirigami.Units.cornerRadius
+        radius: window.cornerRadius
         color: Qt.alpha(tag.tinted ? tag.tint : Kirigami.Theme.textColor, tag.tinted ? 0.12 : 0.08)
     }
 }

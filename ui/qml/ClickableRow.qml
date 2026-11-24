@@ -28,7 +28,7 @@ Item {
         x: -cr.overflow
         width: parent.width + 2 * cr.overflow
         height: parent.height
-        radius: Kirigami.Units.cornerRadius
+        radius: window.cornerRadius
         color: cr.selected ? Qt.alpha(Kirigami.Theme.highlightColor, 0.25)
              : cr.clickable && mouse.containsMouse ? Qt.alpha(Kirigami.Theme.textColor, 0.07) : "transparent"
     }

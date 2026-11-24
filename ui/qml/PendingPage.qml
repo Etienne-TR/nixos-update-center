@@ -133,9 +133,6 @@ ScrollView {
                 text: prepCard.resumable ? "Reprendre" : "Préparer"
                 enabled: !window.running
                 onClicked: backend.startPrebuild()
-                ToolTip.visible: hovered
-                ToolTip.delay: 500
-                ToolTip.text: "nixos-update-center-engine start-prebuild : systemctl start nixos-update-center-prebuild, qui construit système et Home Manager sans les activer (nix build en priorité minimale), et à part le téléchargement des Flatpaks (nixos-update-center-engine flatpak-update --download : flatpak update --no-deploy)."
             }
             ]
 
@@ -154,7 +151,7 @@ ScrollView {
                             if (!r.state) return "Pas encore préparée.";
                             if (r.state === "failed") return "Incomplète : Préparer reprendra ce qui manque.";
                             if (r.state === "stopped") return "Arrêtée avant la fin : Préparer reprendra ce qui manque.";
-                            return "Dépassée : la config a changé depuis.";
+                            return "La configuration Nix a changé depuis la dernière préparation.";
                         }
                         return "État inconnu : la configuration n'a pas pu être évaluée.";
                     }
@@ -371,9 +368,7 @@ ScrollView {
                     visible: (!confCard.allInstalled || confCard.lockInputs.length > 0) && !window.running
                     iconName: "media-playback-start-symbolic"
                     text: "Appliquer"
-                    tooltip: "update --system --home : système puis Home Manager ; une partie déjà à jour est sautée. Ensuite commit de flake.lock s'il a changé, push des commits, nh clean."
                     hasMenu: confCard.sys.changed !== false && confCard.home.changed !== false
-                    arrowTooltip: "Appliquer une seule partie"
                     onClicked: backend.startUpdate(["--system", "--home"])
                     MenuEntry {
                         text: "Système seulement"
@@ -387,7 +382,6 @@ ScrollView {
                 IconAction {
                     iconName: "view-refresh-symbolic"
                     enabled: !window.running && !backend.checking("config")
-                    tooltip: "Vérifier la configuration : évaluation du système et de Home Manager (environ 20 s), comparées aux générations installées. nixos-update-center-engine pending --only config"
                     onClicked: backend.refreshPart("config")
                 }
             ]
@@ -434,14 +428,10 @@ ScrollView {
                     visible: !window.running && flakeCard.hasOnline
                     enabled: !backend.prebuildActive
                     onClicked: backend.checkUpdates()
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "Adopter toutes les nouvelles versions : les écrire dans flake.lock (nix flake update), puis préparer en arrière-plan. Rien n'est installé ni committé : flake.lock passe dans « Configuration Nix », committé et publié après une application réussie."
                 },
                 IconAction {
                     iconName: "view-refresh-symbolic"
                     enabled: !window.running && !backend.checking("flake")
-                    tooltip: "Rechercher les nouvelles versions en ligne (nix flake update à blanc, sans toucher flake.lock), quelques secondes. Les changements de flake.nix et flake.lock sont vus automatiquement."
                     onClicked: backend.refreshPart("flake")
                 }
             ]
@@ -510,14 +500,10 @@ ScrollView {
                     text: "Mettre à jour"
                     visible: ((page.pending.flatpaks || []).length > 0) && !fpCard.busy
                     onClicked: backend.startFlatpakUpdate()
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "nixos-update-center-engine flatpak-update (unité nixos-update-center-flatpak) : flatpak update --user, puis flatpak uninstall --user --unused. Possible pendant une mise à jour Nix."
                 },
                 IconAction {
                     iconName: "view-refresh-symbolic"
                     enabled: !fpCard.busy && !backend.checking("flatpak")
-                    tooltip: "Rechercher les mises à jour Flatpak seulement : flatpak remote-ls --updates --user. nixos-update-center-engine pending --only flatpak"
                     onClicked: backend.refreshPart("flatpak")
                 }
             ]
@@ -538,9 +524,6 @@ ScrollView {
                     enabled: !window.running && (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available))
                     visible: (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available)) && !window.running
                     onClicked: backend.startUpdate(["--home"])
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "update --home : écrit la nouvelle version de Claude Desktop dans la config (commit), puis home-manager switch, qui la télécharge et l'installe."
                 }
             ]
         }

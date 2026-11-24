@@ -15,7 +15,7 @@ TabButton {
     implicitWidth: Math.round(bold.advanceWidth) + leftPadding + rightPadding
     implicitHeight: label.implicitHeight + topPadding + bottomPadding
     background: Rectangle {
-        radius: Kirigami.Units.cornerRadius
+        radius: window.cornerRadius
         color: t.checked ? Qt.alpha(Kirigami.Theme.textColor, 0.10)
              : t.hovered ? Qt.alpha(Kirigami.Theme.textColor, 0.05) : "transparent"
         border.width: t.visualFocus ? 1 : 0

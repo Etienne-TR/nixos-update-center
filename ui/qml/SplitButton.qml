@@ -21,7 +21,7 @@ Rectangle {
     readonly property int pad: Kirigami.Units.smallSpacing
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
-    radius: Kirigami.Units.cornerRadius
+    radius: window.cornerRadius
     // À plat, comme FlatButton : fond teinté, sans bordure.
     color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
 

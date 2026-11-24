@@ -20,7 +20,7 @@ Rectangle {
     Kirigami.Theme.inherit: false
     color: Kirigami.Theme.backgroundColor
     border.color: Qt.alpha(Kirigami.Theme.textColor, 0.15)
-    radius: Kirigami.Units.cornerRadius
+    radius: window.cornerRadius
     clip: true
 
     ScrollView {

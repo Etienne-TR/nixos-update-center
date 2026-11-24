@@ -177,13 +177,14 @@ ColumnLayout {
     // Filtre de la liste.
     RowLayout {
         Layout.fillWidth: true
+        // Même écart entre filtres que dans Versions installées.
+        spacing: Kirigami.Units.largeSpacing
         // Deux filtres croisés : domaine et nature.
         SegmentedToggle {
             options: [ { text: "Tout", value: "all" }, { text: "Nix", value: "nix" }, { text: "Flatpak", value: "flatpak" } ]
             value: page.domainFilter
             onValueChanged: page.domainFilter = value
         }
-        Item { implicitWidth: Kirigami.Units.largeSpacing }
         SegmentedToggle {
             options: [ { text: "Tout", value: "all" }, { text: "Installations", value: "install" }, { text: "Préparatifs", value: "prep" } ]
             value: page.natureFilter
