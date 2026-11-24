@@ -92,9 +92,16 @@ ScrollView {
                 spacing: Kirigami.Units.smallSpacing
                 // Titre, et à droite la prochaine routine (comme les dates
                 // dans l'en-tête des cartes).
-                RowLayout {
+                // Si les deux ne tiennent pas sur une ligne, la date passe
+                // sous le titre.
+                GridLayout {
+                    id: titleRow
                     Layout.fillWidth: true
+                    readonly property bool narrow: titleLabel.implicitWidth + nextLabel.implicitWidth + Kirigami.Units.gridUnit > width
+                    columns: narrow ? 1 : 2
+                    rowSpacing: 0
                     Label {
+                        id: titleLabel
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         text: "Recherche et préparation des mises à jour"
@@ -102,6 +109,9 @@ ScrollView {
                         font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.2
                     }
                     Label {
+                        id: nextLabel
+                        // À droite, même passée sous le titre.
+                        Layout.alignment: Qt.AlignRight
                         visible: page.r.enabled === true && text.length > 0
                         opacity: 0.7
                         text: page.r.nextTime > 0 ? "prévue " + window.when(page.r.nextTime) : page.r.next ? "prévue : " + page.r.next : ""

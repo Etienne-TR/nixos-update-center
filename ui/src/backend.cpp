@@ -334,6 +334,21 @@ void Backend::runEngine(const QStringList &args, std::function<void(int, const Q
   p->start(m_engine, args);
 }
 
+// Interroge le dépôt (Flathub) sur les versions encore disponibles d'une
+// application. Le résultat précédent reste affiché pendant la requête
+// (sinon la sélection clignote) ; il est remplacé à la réponse.
+void Backend::checkFlatpakHistory(const QString &ref) {
+  runEngine({"flatpak-history", ref}, [this, ref](int code, const QByteArray &out) {
+    QVariantMap r;
+    if (code == 0)
+      r.insert("commits", QJsonDocument::fromJson(out).object().value("commits").toArray().toVariantList());
+    else
+      r.insert("error", true);
+    m_flatpakAvailable.insert(ref, r);
+    emit flatpakAvailableChanged();
+  });
+}
+
 void Backend::refreshRoutine() {
   runEngine({"settings"}, [this](int, const QByteArray &out) {
     m_routine = QJsonDocument::fromJson(out).object().toVariantMap();

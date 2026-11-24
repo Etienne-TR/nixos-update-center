@@ -144,8 +144,8 @@ ColumnLayout {
             id: line
             required property var modelData
             readonly property var it: modelData
-            // Place pour le débord du fond de survol (et la barre de
-            // défilement à droite).
+            // Place pour le débord du fond de survol, et pour la barre de
+            // défilement à droite.
             width: ListView.view.width - Kirigami.Units.gridUnit - 2 * Kirigami.Units.largeSpacing
             onClicked: page.opened = line.it.key
             Label { text: line.it.title }
@@ -184,6 +184,21 @@ ColumnLayout {
         // Version choisie (index), -1 : aucune.
         property int chosen: -1
         readonly property var pick: chosen >= 0 ? versions[chosen] : null
+        // Flatpak : versions encore disponibles sur le dépôt (Flathub n'en
+        // garde que quelques-unes), demandées à l'ouverture. checking :
+        // réponse attendue ; en cas d'erreur réseau, rien n'est grisé.
+        readonly property var avail: flat ? backend.flatpakAvailable[cur.ref] : null
+        readonly property bool checking: flat && !avail
+        function available(it) {
+            return !flat || (!!avail && (avail.error === true || (avail.commits || []).includes(it.commit)));
+        }
+        // Choix d'office : la plus récente des versions antérieures encore
+        // disponibles (celle d'un retour arrière).
+        function preselect() {
+            chosen = versions.findIndex(it => it.rank >= 1 && available(it));
+        }
+        onAvailChanged: if (isOpen && (chosen < 0 || !available(versions[chosen]))) preselect()
+        property bool isOpen: false
         parent: Overlay.overlay
         anchors.centerIn: parent
         modal: true
@@ -191,12 +206,14 @@ ColumnLayout {
         // Choisie d'office : la version précédente (celle d'un retour
         // arrière), s'il y en a une.
         onOpened: {
-            chosen = versions.findIndex(it => it.rank === 1);
+            isOpen = true;
+            if (flat) backend.checkFlatpakHistory(cur.ref);
+            preselect();
             // Focus sur la liste (flèches tout de suite, Tab ensuite vers
             // Annuler).
             historyList.forceActiveFocus();
         }
-        onClosed: page.opened = ""
+        onClosed: { isOpen = false; page.opened = ""; }
         width: window.largeDialogWidth
         // Hauteur fixe, basse (environ six versions, défilement au-delà),
         // quel que soit leur nombre : le bouton reste près de la liste.
@@ -234,7 +251,7 @@ ColumnLayout {
         // seulement sur un bouton.
         function move(step) {
             let i = history.chosen < 0 ? (step > 0 ? -1 : versions.length) : history.chosen;
-            do i += step; while (i >= 0 && i < versions.length && versions[i].current);
+            do i += step; while (i >= 0 && i < versions.length && (versions[i].current || !available(versions[i])));
             if (i >= 0 && i < versions.length) {
                 history.chosen = i;
                 historyList.positionViewAtIndex(i, ListView.Contain);
@@ -260,15 +277,18 @@ ColumnLayout {
                 required property int index
                 readonly property var it: modelData
                 width: historyList.width - Kirigami.Units.gridUnit - 2 * Kirigami.Units.largeSpacing
-                // L'actuelle ne se choisit pas (rien à faire).
-                clickable: !hrow.it.current
+                // L'actuelle ne se choisit pas (rien à faire), ni une version
+                // que le dépôt n'a plus (ou pas encore vérifiée).
+                readonly property bool gone: !hrow.it.current && !history.checking && !history.available(hrow.it)
+                clickable: !hrow.it.current && !history.checking && !gone
+                opacity: gone ? 0.5 : 1
                 selected: history.chosen === hrow.index
                 onClicked: history.chosen = hrow.index
                 Label { text: hrow.it.kind === "flatpak" ? (hrow.it.version || "Version inconnue") : String(hrow.it.number) }
                 Item { Layout.fillWidth: true }
                 Tag {
                     visible: text.length > 0
-                    text: hrow.it.current ? "actuelle" : hrow.it.rank < 0 ? "plus récente" : ""
+                    text: hrow.it.current ? "actuelle" : hrow.gone ? "plus disponible sur le dépôt" : hrow.it.rank < 0 ? "plus récente" : ""
                     tinted: hrow.it.current
                     tint: Kirigami.Theme.positiveTextColor
                 }
@@ -286,7 +306,9 @@ ColumnLayout {
                 Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
                 visible: !history.pick
                 opacity: 0.7
-                text: "Sélectionner une version pour y revenir."
+                text: history.checking ? "Recherche des versions disponibles sur le dépôt…"
+                    : history.versions.some(it => !it.current && history.available(it)) ? "Sélectionner une version pour y revenir."
+                    : "Aucune version antérieure disponible sur le dépôt."
                 elide: Text.ElideRight
             }
             Item { Layout.fillWidth: true; visible: !!history.pick }

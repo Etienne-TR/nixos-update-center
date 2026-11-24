@@ -149,7 +149,8 @@ ColumnLayout {
             text: dh.subtitle
             opacity: 0.7
             elide: Text.ElideRight
-            horizontalAlignment: dh.narrow ? Text.AlignLeft : Text.AlignRight
+            // À droite, même passés sous le titre.
+            horizontalAlignment: Text.AlignRight
         }
     }
 
@@ -209,8 +210,8 @@ ColumnLayout {
         delegate: ClickableRow {
             id: jrow
             required property var modelData
-            // Place pour le débord du fond de survol (et la barre de
-            // défilement à droite).
+            // Place pour le débord du fond de survol, et pour la barre de
+            // défilement à droite.
             width: ListView.view.width - Kirigami.Units.gridUnit - 2 * Kirigami.Units.largeSpacing
             onClicked: page.opened = jrow.modelData.id
             Label { text: jrow.modelData.title }

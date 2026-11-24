@@ -1579,11 +1579,22 @@ cmd_news() {
     (.entries[] | "* \(.time[:10])\n\n\(.message)\n")' "$news_last"
 }
 
+# Versions d'une application Flatpak encore disponibles sur son dépôt
+# (Flathub ne garde qu'un historique court) : commits, en JSON. Une
+# requête réseau, lancée à l'ouverture de l'historique de l'application.
+cmd_flatpak_history() { # ref (app/…/x86_64/stable)
+  local ref="${1:?}" origin
+  origin=$(flatpak info --user --show-origin "${ref#app/}" 2>/dev/null) || die "application non installée : $ref"
+  flatpak remote-info --user --log "$origin" "$ref" 2>/dev/null |
+    sed -nE 's/^ *Commit: ([0-9a-f]+)$/\1/p' | jq -R . | jq -s --arg ref "$ref" '{ref: $ref, commits: .}'
+}
+
 cmd="${1:-}"
 [ $# -eq 0 ] || shift
 case "$cmd" in
   run) cmd_run "$@" ;;
   flatpak-update) cmd_flatpak_update "$@" ;;
+  flatpak-history) cmd_flatpak_history "$@" ;;
   prebuild) cmd_prebuild ;;
   pending) cmd_pending "$@" ;;
   generations) cmd_generations ;;

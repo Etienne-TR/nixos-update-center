@@ -99,7 +99,10 @@ ApplicationWindow {
         }
     }
 
-    function showRunTab() { tabs.currentIndex = 1; journalPage.openRunning(); }
+    // Ordre des onglets : 0 Mises à jour, 1 Versions installées, 2 Journal,
+    // 3 Planification.
+    readonly property int journalTab: 2
+    function showRunTab() { tabs.currentIndex = window.journalTab; journalPage.openRunning(); }
 
 
     // Confirmation avant une action lourde (arrêt, retour arrière).
@@ -275,8 +278,8 @@ ApplicationWindow {
                 FlatTab {
                     text: backend.pendingCount > 0 ? "Mises à jour ●" : "Mises à jour ✓"
                 }
+                FlatTab { text: "Versions installées" }
                 FlatTab { text: window.running ? "Journal ●" : "Journal" }
-                FlatTab { text: "Versions" }
                 FlatTab { text: "Planification" }
                 onCurrentIndexChanged: {
                     if (currentIndex === 1 || currentIndex === 2) backend.refreshGenerations();
@@ -421,7 +424,7 @@ ApplicationWindow {
                     iconName: "view-list-details-symbolic"
                     fallbackName: "view-list-text"
                     tooltip: "Voir dans le Journal"
-                    onClicked: { tabs.currentIndex = 1; journalPage.opened = strip.taskId; }
+                    onClicked: { tabs.currentIndex = window.journalTab; journalPage.opened = strip.taskId; }
                 }
                 IconAction {
                     iconName: strip.expanded ? "go-down-symbolic" : "go-up-symbolic"
@@ -481,7 +484,7 @@ ApplicationWindow {
         || (window.running && (backend.run.parts || []).some(p => p.id === "flatpak" && p.state === "running"))
     footer: ColumnLayout {
         spacing: 0
-        visible: tabs.currentIndex !== 1
+        visible: tabs.currentIndex !== window.journalTab
         // Un bandeau par action en cours : celles du Journal (une mise à
         // jour complète : une action par partie), plus les recherches.
         Repeater {
@@ -531,8 +534,8 @@ ApplicationWindow {
         anchors.topMargin: window.margin
         currentIndex: tabs.currentIndex
         PendingPage {}
-        JournalPage { id: journalPage }
         GenerationsPage {}
+        JournalPage { id: journalPage }
         SettingsPage {}
     }
 }

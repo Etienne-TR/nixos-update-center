@@ -67,7 +67,9 @@ Frame {
             // Rien à afficher (section à jour) : pas d'espace vide.
             visible: card.bodyVisible
             Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
+            // Pas d'espace entre les lignes : même pas que les listes des
+            // autres onglets (la hauteur de ligne suffit).
+            spacing: 0
         }
     }
 }

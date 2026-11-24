@@ -69,6 +69,9 @@ ScrollView {
     // l'espace au-dessus.
     component Heading: Label {
         Layout.topMargin: Kirigami.Units.largeSpacing
+        // Un peu d'air avant la liste (les cartes n'espacent plus leurs
+        // lignes).
+        Layout.bottomMargin: Kirigami.Units.smallSpacing
         font.weight: 650  // entre demi-gras (600) et gras (700)
     }
     // Ligne simple d'une liste : même hauteur que les lignes cliquables.

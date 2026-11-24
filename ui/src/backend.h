@@ -53,6 +53,10 @@ class Backend : public QObject {
   Q_PROPERTY(QString title READ title CONSTANT)
   // Réglages effectifs de la routine (config.json, puis settings.json).
   Q_PROPERTY(QVariantMap routine READ routine NOTIFY routineChanged)
+  // Versions encore disponibles sur le dépôt, par ref Flatpak :
+  // { ref: { commits: [...], error: bool } } ; absente avant la première
+  // réponse.
+  Q_PROPERTY(QVariantMap flatpakAvailable READ flatpakAvailable NOTIFY flatpakAvailableChanged)
 
  public:
   explicit Backend(QObject *parent = nullptr);
@@ -98,6 +102,7 @@ class Backend : public QObject {
   bool runActive() const { return m_run.value("active").toBool(); }
   bool updateReady() const;
   QVariantMap routine() const { return m_routine; }
+  QVariantMap flatpakAvailable() const { return m_flatpakAvailable; }
 
   Q_INVOKABLE void startUpdate(const QStringList &parts);
   Q_INVOKABLE void checkUpdates();
@@ -112,6 +117,7 @@ class Backend : public QObject {
   // nix flake update <entrée> (commit de flake.lock), dans l'unité de mise à jour.
   Q_INVOKABLE void updateInput(const QString &name);
   Q_INVOKABLE void refreshRoutine();
+  Q_INVOKABLE void checkFlatpakHistory(const QString &ref);
   Q_INVOKABLE void saveRoutine(const QVariantMap &routine);
   Q_INVOKABLE void resetRoutine();
   Q_INVOKABLE void stopRun();
@@ -146,6 +152,7 @@ class Backend : public QObject {
   void generationsChanged();
   void summaryChanged();
   void routineChanged();
+  void flatpakAvailableChanged();
   // Erreur à montrer (réglages refusés…).
   void error(const QString &message);
   // Une exécution vient d'être lancée depuis l'interface.
@@ -166,6 +173,7 @@ class Backend : public QObject {
   QString m_state, m_engine;
   QTimer m_timer;
   QVariantMap m_routine;
+  QVariantMap m_flatpakAvailable;
   QStringList m_watched;
   QString m_configStamp;
   QTimer m_configTimer;
