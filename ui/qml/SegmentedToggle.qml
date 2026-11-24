@@ -14,10 +14,10 @@ Rectangle {
     readonly property int pad: 3
     implicitWidth: row.implicitWidth + 2 * pad
     implicitHeight: row.implicitHeight + 2 * pad
-    // Arrondis concentriques : rayon extérieur = rayon de la pastille +
-    // marge, pour une marge égale le long des bords et dans les coins.
-    readonly property int innerRadius: Math.round(Kirigami.Units.cornerRadius)
-    radius: innerRadius + pad
+    // Arrondi extérieur commun à toute l'appli (cornerRadius), pastille
+    // concentrique à l'intérieur : rayon extérieur moins la marge.
+    readonly property int innerRadius: Math.max(2, Math.round(Kirigami.Units.cornerRadius) - pad)
+    radius: Kirigami.Units.cornerRadius
     color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
 
     // Pastille du segment actif.

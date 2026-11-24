@@ -22,28 +22,25 @@ Rectangle {
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
     radius: Kirigami.Units.cornerRadius
-    color: Kirigami.Theme.backgroundColor
-    border.width: 1
-    border.color: Qt.alpha(Kirigami.Theme.textColor, 0.25)
+    // À plat, comme FlatButton : fond teinté, sans bordure.
+    color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
 
-    // Fond de survol d'une partie, arrondi seulement côté extérieur.
+    // Fond de survol d'une partie : un seul rectangle (une seule couche de
+    // transparence, pas de zone plus foncée), arrondi côté extérieur et
+    // coupé net côté intérieur, contre le trait de séparation.
     component Hover: Item {
         property bool shown
         property bool leftSide
         anchors.fill: parent
-        anchors.margins: 1
         visible: shown
+        clip: true
         Rectangle {
-            anchors.fill: parent
-            radius: sb.radius - 1
-            color: Qt.alpha(Kirigami.Theme.highlightColor, 0.15)
-        }
-        // Côté intérieur à angle droit.
-        Rectangle {
-            width: parent.width / 2
+            // Débord côté intérieur, masqué par clip : coins carrés là.
+            width: parent.width + radius
             height: parent.height
-            x: parent.leftSide ? parent.width / 2 : 0
-            color: Qt.alpha(Kirigami.Theme.highlightColor, 0.15)
+            x: parent.leftSide ? 0 : -radius
+            radius: sb.radius
+            color: Qt.alpha(Kirigami.Theme.textColor, 0.06)
         }
     }
 

@@ -13,6 +13,14 @@ Frame {
     property color badgeColor: Kirigami.Theme.textColor
     default property alias content: inner.data
     padding: Kirigami.Units.largeSpacing
+    // À plat, comme le reste : fond légèrement teinté, bordure discrète,
+    // arrondi commun.
+    background: Rectangle {
+        radius: Kirigami.Units.cornerRadius
+        color: Qt.alpha(Kirigami.Theme.textColor, 0.03)
+        border.width: 1
+        border.color: Qt.alpha(Kirigami.Theme.textColor, 0.10)
+    }
     // Boutons d'action, alignés à droite sur la ligne du titre.
     property alias actions: actionsRow.data
     // false : seulement la ligne de titre (section sans contenu à montrer).
