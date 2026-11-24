@@ -35,10 +35,12 @@ build() {
     engine=$(nix build --no-link --print-out-paths "${override[@]}" .#engine)
 }
 start() {
+  # Messages Qt (erreurs QML comprises) dans ce journal, pas dans journald.
   # Moteur du dépôt aussi (vérifications, et mises à jour lancées depuis
   # cette fenêtre : sa commande passe en tête du PATH).
   PATH="$engine/bin:$PATH" UPDATE_CENTER_ENGINE="$engine/bin/nixos-update-center-engine" \
     UPDATE_CENTER_QML_DIR="$PWD/ui/qml" UPDATE_CENTER_SOCKET=nixos-update-center-dev \
+    QT_FORCE_STDERR_LOGGING=1 \
     "$ui/bin/nixos-update-center-ui" --show &
   pid=$!
   echo "== $(date +%T) interface lancée ($pid)"
