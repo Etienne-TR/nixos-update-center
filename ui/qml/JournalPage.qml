@@ -20,19 +20,7 @@ ColumnLayout {
     readonly property string fpLog: fp.log || ""
     // Titre d'une partie (une action) d'après son identifiant.
     function partTitle(p) {
-        switch (p.id) {
-        case "system": return "Mise à jour système";
-        case "home": return "Mise à jour utilisateur";
-        case "flatpak_download": return "Préparation Flatpak";
-        case "flatpak": return p.label && p.label !== "Flatpak" ? "Mise à jour Flatpak (" + p.label.replace(/^Flatpak \((.*)\)$/, "$1") + ")" : "Mise à jour Flatpak";
-        case "flake": {
-            // « Flake (a b) » : ces entrées ; « Flake » : toutes.
-            const m = /^Flake \((.*)\)$/.exec(p.label || "");
-            return m ? "Adoption de " + m[1].split(" ").join(", ") : "Adoption de toutes les entrées";
-        }
-        case "rollback_system": case "rollback_home": return p.label || "Retour arrière";
-        default: return p.label || p.id;
-        }
+        return window.actionTitle(p.id, p.label) || p.label || p.id;
     }
     // Titre d'une exécution d'après ses parties.
     function entryTitle(h) {
@@ -89,10 +77,10 @@ ColumnLayout {
             running.push({ section: "En cours", id: "flatpak", title: page.partTitle((fp.parts || [])[0] || { id: "flatpak" }),
                            state: "running", detail: "" });
         if (backend.prebuildActive)
-            running.push({ section: "En cours", id: "prebuild", title: "Préparation Nix", state: "running",
+            running.push({ section: "En cours", id: "prebuild", title: window.actionTitle("prebuild"), state: "running",
                            // « évaluation de la configuration », puis « 89 % · 120 sur
                            // 146 éléments » (constructions et téléchargements).
-                           detail: pre.phase === "eval" || !(pre.fraction >= 0) ? "évaluation"
+                           detail: pre.phase === "eval" || !(pre.fraction >= 0) ? "évaluation de la configuration"
                                  : Math.round(pre.fraction * 100) + " % · "
                                    + (((pre.builds || {}).done || 0) + ((pre.downloads || {}).done || 0)) + "/"
                                    + (((pre.builds || {}).expected || 0) + ((pre.downloads || {}).expected || 0)) + " éléments" });
@@ -101,7 +89,7 @@ ColumnLayout {
     readonly property var tasks: {
         const running = page.runningTasks.slice(), past = [];
         if (!backend.prebuildActive && result.state)
-            past.push({ id: "prebuild", title: "Préparation Nix", state: result.state,
+            past.push({ id: "prebuild", title: window.actionTitle("prebuild"), state: result.state,
                         detail: window.shortWhen(result.time), stateText: result.state === "failed" ? "incomplète" : stateWord(result.state),
                         section: window.daySection(result.time),
                         time: result.time });
@@ -235,15 +223,16 @@ ColumnLayout {
         modal: true
         visible: page.current.length > 0
         onClosed: page.opened = ""
-        width: window.width - 2 * Kirigami.Units.gridUnit
-        height: window.height - 2 * Kirigami.Units.gridUnit
+        width: window.largeDialogWidth
+        height: window.largeDialogHeight
         padding: Kirigami.Units.largeSpacing * 1.5
-        footer: DialogButtonBox {
-            padding: Kirigami.Units.largeSpacing * 1.5
-            topPadding: 0
-            Button {
+        footer: RowLayout {
+            Item { Layout.fillWidth: true }
+            FlatButton {
                 text: "Fermer"
-                DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
+                Layout.rightMargin: Kirigami.Units.largeSpacing * 2
+                Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
+                onClicked: detailDialog.close()
             }
         }
         contentItem: StackLayout {
@@ -316,7 +305,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Kirigami.Units.smallSpacing
                     DetailHeader {
-                        title: "Préparation Nix"
+                        title: window.actionTitle("prebuild")
                         subtitle: backend.prebuildActive ? (page.pre.boosted ? "à pleine vitesse" : "priorité minimale")
                                 : page.result.time ? window.when(page.result.time) : ""
                     }
@@ -459,10 +448,9 @@ ColumnLayout {
                                 text: modelData.label + " : génération n° " + modelData.g.gen.number
                                       + (modelData.g.gen.current ? " (actuelle)" : "")
                             }
-                            Button {
+                            FlatButton {
                                 visible: !!modelData.g.prev && modelData.g.gen.current
                                 enabled: !window.running
-                                flat: true
                                 text: "Revenir à la précédente (n° " + (modelData.g.prev ? modelData.g.prev.number : "") + ")"
                                 onClicked: {
                                     const n = modelData.g.prev.number, kind = modelData.kind;

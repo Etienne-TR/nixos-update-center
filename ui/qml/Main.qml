@@ -5,6 +5,14 @@ import org.kde.kirigami as Kirigami
 
 ApplicationWindow {
     id: window
+    // Marge unique de la fenêtre : autour des onglets et autour du contenu
+    // des onglets, la même partout.
+    readonly property real margin: Kirigami.Units.largeSpacing * 1.5
+    // Dimensions communes des fenêtres par-dessus les onglets : petites
+    // (fiche, confirmation) et grandes (listes, journaux).
+    readonly property real smallDialogWidth: Math.min(width - 2 * Kirigami.Units.gridUnit, Kirigami.Units.gridUnit * 26)
+    readonly property real largeDialogWidth: Math.min(width - 2 * Kirigami.Units.gridUnit, Kirigami.Units.gridUnit * 40)
+    readonly property real largeDialogHeight: height - 2 * Kirigami.Units.gridUnit
     title: backend.title
     width: 820
     height: 680
@@ -104,7 +112,7 @@ ApplicationWindow {
         property string confirmLabel: "Confirmer"
         anchors.centerIn: parent
         modal: true
-        width: Math.min(window.width - 40, 480)
+        width: window.smallDialogWidth
         padding: Kirigami.Units.largeSpacing * 2
         header: Label {
             text: confirm.title
@@ -117,17 +125,22 @@ ApplicationWindow {
             id: confirmText
             wrapMode: Text.WordWrap
         }
-        footer: DialogButtonBox {
-            padding: Kirigami.Units.largeSpacing * 2
-            topPadding: 0
-            Button {
+        // Ordre des boutons de toute l'appli : Annuler / Fermer d'abord,
+        // l'action principale tout à droite.
+        footer: RowLayout {
+            spacing: Kirigami.Units.smallSpacing
+            Item { Layout.fillWidth: true }
+            FlatButton {
+                text: "Annuler"
+                Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
+                onClicked: confirm.reject()
+            }
+            FlatButton {
                 text: confirm.confirmLabel
                 highlighted: true
-                DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
-            }
-            Button {
-                text: "Annuler"
-                DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
+                Layout.rightMargin: Kirigami.Units.largeSpacing * 2
+                Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
+                onClicked: confirm.accept()
             }
         }
         onAccepted: action()
@@ -140,7 +153,7 @@ ApplicationWindow {
         property var actions: []
         anchors.centerIn: parent
         modal: true
-        width: Math.min(window.width - 40, 480)
+        width: window.smallDialogWidth
         padding: Kirigami.Units.largeSpacing * 2
         header: Label {
             text: info.title
@@ -158,20 +171,25 @@ ApplicationWindow {
         footer: RowLayout {
             spacing: Kirigami.Units.smallSpacing
             Item { Layout.fillWidth: true; Layout.leftMargin: Kirigami.Units.largeSpacing * 2 }
+            // « Fermer » d'abord, les actions ensuite, la principale (la
+            // dernière) tout à droite.
+            FlatButton {
+                text: "Fermer"
+                Layout.rightMargin: info.actions.length > 0 ? 0 : Kirigami.Units.largeSpacing * 2
+                Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
+                onClicked: info.close()
+            }
             Repeater {
                 model: info.actions
-                Button {
+                FlatButton {
                     required property var modelData
+                    required property int index
+                    Layout.rightMargin: index === info.actions.length - 1 ? Kirigami.Units.largeSpacing * 2 : 0
+                    Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
                     text: modelData.text
                     enabled: modelData.enabled !== false
                     onClicked: { info.close(); modelData.run(); }
                 }
-            }
-            Button {
-                text: "Fermer"
-                Layout.rightMargin: Kirigami.Units.largeSpacing * 2
-                Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
-                onClicked: info.close()
             }
         }
     }
@@ -196,9 +214,17 @@ ApplicationWindow {
         property alias text: logText.text
         anchors.centerIn: parent
         modal: true
-        width: window.width - 40
-        height: window.height - 40
-        standardButtons: Dialog.Close
+        width: window.largeDialogWidth
+        height: window.largeDialogHeight
+        footer: RowLayout {
+            Item { Layout.fillWidth: true }
+            FlatButton {
+                text: "Fermer"
+                Layout.rightMargin: Kirigami.Units.largeSpacing * 2
+                Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
+                onClicked: logViewer.close()
+            }
+        }
         MonoText {
             id: logText
             anchors.fill: parent
@@ -211,17 +237,36 @@ ApplicationWindow {
     }
 
     header: ToolBar {
+        // Côtés : la marge de la fenêtre ; haut et bas plus serrés, la barre
+        // reste basse.
+        leftPadding: window.margin
+        rightPadding: window.margin
+        topPadding: Kirigami.Units.smallSpacing * 1.5
+        bottomPadding: Kirigami.Units.smallSpacing * 1.5
         contentItem: RowLayout {
             spacing: Kirigami.Units.smallSpacing
             TabBar {
                 id: tabs
                 Layout.fillWidth: true
-                TabButton {
-                    text: backend.pendingCount > 0 ? "Mises à jour ●" : "Mises à jour"
+                // Onglets à plat (FlatTab) : pas de fond ni de ligne du style.
+                background: Item {}
+                // Onglets espacés : le style ignore « spacing », d'où une
+                // rangée à nous.
+                contentItem: ListView {
+                    model: tabs.contentModel
+                    currentIndex: tabs.currentIndex
+                    orientation: ListView.Horizontal
+                    spacing: Kirigami.Units.smallSpacing
+                    interactive: false
+                    boundsBehavior: Flickable.StopAtBounds
+                    implicitHeight: contentItem.childrenRect.height
                 }
-                TabButton { text: window.running ? "Journal ●" : "Journal" }
-                TabButton { text: "Versions" }
-                TabButton { text: "Réglages" }
+                FlatTab {
+                    text: backend.pendingCount > 0 ? "Mises à jour ●" : "Mises à jour ✓"
+                }
+                FlatTab { text: window.running ? "Journal ●" : "Journal" }
+                FlatTab { text: "Versions" }
+                FlatTab { text: "Planification" }
                 onCurrentIndexChanged: {
                     if (currentIndex === 1 || currentIndex === 2) backend.refreshGenerations();
                     if (currentIndex === 3) backend.refreshRoutine();
@@ -231,9 +276,9 @@ ApplicationWindow {
             // sien) ; la recherche en cours s'affiche dans le bandeau du bas.
             IconAction {
                 visible: tabs.currentIndex === 0
-                // Aligné sur les flèches des cartes (marge de la page et des
-                // cartes).
-                Layout.rightMargin: Kirigami.Units.largeSpacing + Kirigami.Units.smallSpacing
+                // Aligné sur les flèches des cartes : retrait intérieur des
+                // cartes (la marge de la fenêtre est commune).
+                Layout.rightMargin: Kirigami.Units.largeSpacing + 1
                 iconName: "view-refresh-symbolic"
                 enabled: !backend.checking("all")
                 tooltip: "Tout vérifier (30 à 60 s) : configuration Nix, nouvelles versions en ligne, Flatpaks. Rien n'est modifié."
@@ -375,26 +420,36 @@ ApplicationWindow {
             }
         }
     }
-    // Libellé homogène d'un bandeau : « Carte · action », la carte de
-    // l'onglet Mises à jour concernée d'abord.
+    // Nom d'une action, le même partout (bandeaux, Journal) : « Action
+    // (domaine) » ; l'adoption dit « dans le flake ». id : identifiant de
+    // la partie ; label : son libellé du moteur (« Flake (a b) »…).
+    function actionTitle(id, label) {
+        const one = /\((.*)\)$/.exec(label || "");
+        switch (id) {
+        case "prebuild": return "Préparation (Nix)";
+        case "flatpak_download": return "Préparation (Flatpak)";
+        case "system": return "Mise à jour système (NixOS)";
+        case "home": return "Mise à jour utilisateur (Home Manager)";
+        case "flake": return one ? "Adoption de " + one[1].split(" ").join(", ") + " dans le flake" : "Adoption de toutes les entrées du flake";
+        case "flatpak": return (one ? "Mise à jour de " + one[1] : "Mise à jour") + " (Flatpak)";
+        case "rollback_system": case "rollback_home": {
+            // Numéro de la génération, à la fin du libellé du moteur.
+            const n = /(\d+)$/.exec(label || "");
+            return "Retour à " + (n ? "la génération " : "une génération ")
+                + (id === "rollback_system" ? "système " : "utilisateur ") + (n ? n[1] + " " : "")
+                + (id === "rollback_system" ? "(NixOS)" : "(Home Manager)");
+        }
+        case "check:config": case "check:system": case "check:home": return "Vérification de la configuration (Nix)";
+        case "check:flake": return "Recherche (flake)";
+        case "check:nix": return "Recherche (Nix)";
+        case "check:flatpak": return "Recherche (Flatpak)";
+        default: return "";
+        }
+    }
     function stripLabel(t) {
         const id = t.part ? t.part.id : t.id === "flatpak" ? ((backend.flatpakRun.parts || [])[0] || {}).id || "flatpak" : t.id;
         const label = (t.part || (backend.flatpakRun.parts || [])[0] || {}).label || "";
-        const one = /\((.*)\)$/.exec(label);
-        switch (id) {
-        case "prebuild": return "Préparation · construction Nix";
-        case "flatpak_download": return "Préparation · téléchargement Flatpak";
-        case "system": return "Configuration Nix · mise à jour système";
-        case "home": return "Configuration Nix · mise à jour utilisateur";
-        case "flake": return "Mise à jour du flake · adoption" + (one ? " de " + one[1].split(" ").join(", ") : "");
-        case "flatpak": return "Flatpaks · mise à jour" + (one ? " de " + one[1] : "");
-        case "rollback_system": case "rollback_home": return "Versions · " + label.charAt(0).toLowerCase() + label.slice(1);
-        case "check:config": case "check:system": case "check:home": return "Configuration Nix · vérification";
-        case "check:flake": return "Mise à jour du flake · recherche";
-        case "check:nix": return "Configuration Nix et Mise à jour du flake · recherche";
-        case "check:flatpak": return "Flatpaks · recherche";
-        default: return t.title || id;
-        }
+        return actionTitle(id, label) || t.title || id;
     }
     // Avancement de la construction pendant une mise à jour.
     readonly property real buildFraction: {
@@ -454,7 +509,9 @@ ApplicationWindow {
 
     StackLayout {
         anchors.fill: parent
-        anchors.margins: Kirigami.Units.largeSpacing
+        // Marge de la fenêtre ; en haut, celle de la barre d'onglets suffit.
+        anchors.margins: window.margin
+        anchors.topMargin: window.margin
         currentIndex: tabs.currentIndex
         PendingPage {}
         JournalPage { id: journalPage }

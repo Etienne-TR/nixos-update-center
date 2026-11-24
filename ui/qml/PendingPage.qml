@@ -122,7 +122,7 @@ ScrollView {
             actions: [
             // En cours : vitesse, pause, arrêt et terminal sont dans le
             // bandeau du bas.
-            Button {
+            FlatButton {
                 visible: !backend.prebuildActive && !window.running && (prepCard.prep === "stale" || prepCard.prep === "unknown")
                 icon.name: "media-playback-start-symbolic"
                 text: prepCard.resumable ? "Reprendre" : "Préparer"
@@ -325,9 +325,17 @@ ScrollView {
                 anchors.centerIn: parent
                 modal: true
                 title: "Paquets prêts à installer"
-                width: Math.min(window.width - 40, Kirigami.Units.gridUnit * 36)
-                height: Math.min(window.height - 40, Kirigami.Units.gridUnit * 30)
-                standardButtons: Dialog.Close
+                width: window.largeDialogWidth
+                height: window.largeDialogHeight
+                footer: RowLayout {
+                    Item { Layout.fillWidth: true }
+                    FlatButton {
+                        text: "Fermer"
+                        Layout.rightMargin: Kirigami.Units.largeSpacing * 2
+                        Layout.bottomMargin: Kirigami.Units.largeSpacing * 2
+                        onClicked: packagesDialog.close()
+                    }
+                }
                 ListView {
                     anchors.fill: parent
                     clip: true
@@ -389,7 +397,7 @@ ScrollView {
             readonly property bool hasOnline: online.length > 0
             title: "Mise à jour du flake"
             // Dernière recherche en ligne : dit si la liste est fraîche.
-            subtitle: page.upstream.time ? "vérifié " + window.when(page.upstream.time) : ""
+            subtitle: page.upstream.time ? "vérifiée " + window.when(page.upstream.time) : ""
             bodyVisible: hasOnline || !page.upstream.checked || window.running
             badge: hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
@@ -415,7 +423,7 @@ ScrollView {
             // Adopter sur la ligne de titre, comme les autres actions
             // principales ; ↻ toujours en dernier.
             actions: [
-                Button {
+                FlatButton {
                     icon.name: "media-playback-start-symbolic"
                     text: "Adopter"
                     visible: !window.running && flakeCard.hasOnline
@@ -441,7 +449,7 @@ ScrollView {
             readonly property bool busy: backend.flatpakRun.active === true
                 || (window.running && (backend.run.parts || []).some(p => p.id === "flatpak" && (p.state === "running" || p.state === "pending")))
             title: "Flatpaks"
-            subtitle: page.pending.flatpakTime ? "vérifié " + window.when(page.pending.flatpakTime) : ""
+            subtitle: page.pending.flatpakTime ? "vérifiés " + window.when(page.pending.flatpakTime) : ""
             bodyVisible: (page.pending.flatpaks || []).length > 0
             badge: (page.pending.flatpaks || []).length > 0 ? "●" : "✓"
             badgeColor: (page.pending.flatpaks || []).length > 0 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
@@ -492,7 +500,7 @@ ScrollView {
             actions: [
                 // Possible pendant une exécution Nix (adopter, appliquer) :
                 // les Flatpaks ont leur propre unité.
-                Button {
+                FlatButton {
                     icon.name: "media-playback-start-symbolic"
                     text: "Mettre à jour"
                     visible: ((page.pending.flatpaks || []).length > 0) && !fpCard.busy
@@ -519,7 +527,7 @@ ScrollView {
                                   : "À jour (" + c.configured + ")."
             }
             actions: [
-                Button {
+                FlatButton {
                     icon.name: "media-playback-start-symbolic"
                     text: "Mettre à jour"
                     enabled: !window.running && (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available))

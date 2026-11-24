@@ -24,8 +24,9 @@ ClickableRow {
         else if (i.to && i.to.rev) lines.push("Révision : " + short(i.to.rev));
         if (i.to && i.to.owner) lines.push("Dépôt : " + i.to.owner + "/" + i.to.repo);
         const actions = [];
-        if (row.updatable) actions.push({ text: "Adopter l'entrée", enabled: !window.running, run: () => backend.updateInput(i.name) });
+        // Voir d'abord, adopter ensuite (action principale près de Fermer).
         if (row.url.length > 0) actions.push({ text: "Voir les changements ↗", run: () => Qt.openUrlExternally(row.url) });
+        if (row.updatable) actions.push({ text: "Adopter l'entrée", enabled: !window.running, run: () => backend.updateInput(i.name) });
         window.showInfo(i.name, lines.filter(x => x).join("\n"), actions);
     }
 

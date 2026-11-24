@@ -12,41 +12,57 @@ ScrollView {
 
     readonly property var r: backend.routine
     readonly property var days: [
-        { key: "", label: "Tous les jours" },
-        { key: "Mon", label: "Lundi" }, { key: "Tue", label: "Mardi" },
-        { key: "Wed", label: "Mercredi" }, { key: "Thu", label: "Jeudi" },
-        { key: "Fri", label: "Vendredi" }, { key: "Sat", label: "Samedi" },
-        { key: "Sun", label: "Dimanche" }
+        { key: "Mon", label: "Lun", name: "lundi" }, { key: "Tue", label: "Mar", name: "mardi" },
+        { key: "Wed", label: "Mer", name: "mercredi" }, { key: "Thu", label: "Jeu", name: "jeudi" },
+        { key: "Fri", label: "Ven", name: "vendredi" }, { key: "Sat", label: "Sam", name: "samedi" },
+        { key: "Sun", label: "Dim", name: "dimanche" }
     ]
+    // Jours choisis (clés systemd : Mon, Tue…), un ou plusieurs.
+    property var chosenDays: ["Wed"]
     property string errorText: ""
 
-    // « Wed 03:00:00 », « *-*-* 03:00:00 » ou « daily » → jour et heure ;
-    // sinon horaire avancé, gardé tel quel.
+    // « Mon,Thu 03:00:00 », « Wed 03:00:00 », « *-*-* 03:00:00 » ou
+    // « daily » → jours et heure ; sinon null (laissés tels quels).
     function parse(cal) {
         if (!cal) return null;
-        if (cal === "daily") return { day: "", hour: 0, minute: 0 };
-        const m = /^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+)?(?:\*-\*-\*\s+)?(\d{1,2}):(\d{2})(?::00)?$/.exec(cal);
-        return m ? { day: m[1] || "", hour: parseInt(m[2]), minute: parseInt(m[3]) } : null;
+        const all = page.days.map(d => d.key);
+        if (cal === "daily") return { days: all, hour: 0, minute: 0 };
+        const m = /^(?:((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:,(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun))*)\s+)?(?:\*-\*-\*\s+)?(\d{1,2}):(\d{2})(?::00)?$/.exec(cal);
+        return m ? { days: m[1] ? m[1].split(",") : all, hour: parseInt(m[2]), minute: parseInt(m[3]) } : null;
     }
     function pad(n) { return (n < 10 ? "0" : "") + n; }
     function calendar() {
-        if (advanced.checked) return advancedField.text.trim();
-        const d = page.days[dayBox.currentIndex].key;
-        return (d ? d + " " : "*-*-* ") + pad(hourBox.value) + ":" + pad(minuteBox.value) + ":00";
+        // Dans l'ordre de la semaine ; tous les jours : « *-*-* ».
+        const d = page.days.map(x => x.key).filter(k => page.chosenDays.includes(k));
+        return (d.length === 7 ? "*-*-* " : d.join(",") + " ") + timeField.text + ":00";
+    }
+    // Enregistrement immédiat à chaque changement (pas de bouton) ; pas
+    // pendant le chargement des réglages.
+    property bool loading: false
+    function save() {
+        if (page.loading) return;
+        page.errorText = "";
+        if (!timeField.acceptableInput) {
+            page.errorText = "Heure invalide : format 03:00.";
+            return;
+        }
+        if (page.chosenDays.length === 0) {
+            page.errorText = "Au moins un jour est nécessaire.";
+            return;
+        }
+        const cal = page.calendar();
+        if (cal === r.calendar && enabledBox.checked === (r.enabled === true)) return;
+        backend.saveRoutine({ enabled: enabledBox.checked, calendar: cal });
     }
     function load() {
+        page.loading = true;
         enabledBox.checked = r.enabled === true;
-        flakeBox.checked = r.flakeUpdate !== false;
-        flatpakBox.checked = r.flatpak === true;
-        notifyBox.checked = r.notify === true;
         const p = parse(r.calendar || "");
-        advanced.checked = p === null && !!r.calendar;
-        advancedField.text = r.calendar || "";
         if (p) {
-            dayBox.currentIndex = Math.max(0, page.days.findIndex(x => x.key === p.day));
-            hourBox.value = p.hour;
-            minuteBox.value = p.minute;
+            page.chosenDays = p.days;
+            timeField.text = pad(p.hour) + ":" + pad(p.minute);
         }
+        page.loading = false;
     }
     onRChanged: load()
     Component.onCompleted: load()
@@ -56,80 +72,98 @@ ScrollView {
         function onError(message) { page.errorText = message; }
     }
 
+    contentHeight: content.implicitHeight
     ColumnLayout {
+        id: content
+        // Aligné à gauche comme les filtres du Journal et de Versions (la
+        // marge de l'onglet est commune, dans Main).
         width: page.availableWidth
-        spacing: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.largeSpacing * 2
 
-        Card {
-            title: "Routine"
-            subtitle: page.r.next ? "prochaine : " + page.r.next : ""
-
-            Switch {
-                id: enabledBox
-                text: "Routine activée"
-            }
-            Label {
+        // Une seule section : pas de carte, les réglages directement.
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.largeSpacing
+            // Ce qu'est la routine : titre, puis ses actions.
+            ColumnLayout {
                 Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                opacity: 0.7
-                text: "La routine cherche les mises à jour et les prépare en arrière-plan, en priorité minimale. Rien n'est installé sans toi. Le bouton « Chercher les mises à jour » la lance à la demande, même désactivée."
-            }
-
-            GridLayout {
-                columns: 2
-                enabled: enabledBox.checked
-                columnSpacing: Kirigami.Units.largeSpacing
-
-                Label { text: "Jour" }
-                ComboBox {
-                    id: dayBox
-                    enabled: !advanced.checked
-                    model: page.days.map(d => d.label)
-                }
-
-                Label { text: "Heure" }
+                spacing: Kirigami.Units.smallSpacing
+                // Titre, et à droite la prochaine routine (comme les dates
+                // dans l'en-tête des cartes).
                 RowLayout {
-                    enabled: !advanced.checked
-                    SpinBox { id: hourBox; from: 0; to: 23 }
-                    Label { text: "h" }
-                    SpinBox { id: minuteBox; from: 0; to: 59; stepSize: 5 }
+                    Layout.fillWidth: true
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        text: "Recherche et préparation des mises à jour"
+                        font.weight: 650
+                        font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.2
+                    }
+                    Label {
+                        visible: page.r.enabled === true && text.length > 0
+                        opacity: 0.7
+                        text: page.r.nextTime > 0 ? "prévue " + window.when(page.r.nextTime) : page.r.next ? "prévue : " + page.r.next : ""
+                    }
+                }
+                // Ses actions, en sous-titre.
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    opacity: 0.7
+                    text: "Mise à jour du flake · Construction Nix · Téléchargement des Flatpaks"
+                }
+            }
+            // Réglages, séparés de la description par de l'espace seulement.
+            // Une grille : libellés à gauche, contrôles alignés à droite
+            // d'eux.
+            GridLayout {
+                Layout.topMargin: Kirigami.Units.gridUnit
+                columns: 2
+                columnSpacing: Kirigami.Units.gridUnit
+                rowSpacing: Kirigami.Units.largeSpacing
+
+                Label { text: "Activée" }
+                Switch {
+                    id: enabledBox
+                    onToggled: page.save()
                 }
 
-                CheckBox {
-                    id: advanced
-                    Layout.columnSpan: 2
-                    text: "Horaire avancé (format OnCalendar de systemd)"
+                Label { text: "Jours"; enabled: enabledBox.checked }
+                // Un segment par jour, à cocher : un ou plusieurs.
+                MultiToggle {
+                    id: daysToggle
+                    enabled: enabledBox.checked
+                    options: page.days.map(d => ({ text: d.label, value: d.key, tooltip: d.name }))
+                    values: page.chosenDays
+                    onToggled: (v) => { page.chosenDays = v; page.save(); }
                 }
-                Label { visible: advanced.checked; text: "Horaire" }
+
+                Label { text: "Heure"; enabled: enabledBox.checked }
+                // Heure en un seul champ « 03:00 », centré, même allure que
+                // le sélecteur des jours (fond teinté, arrondi).
                 TextField {
-                    id: advancedField
-                    visible: advanced.checked
-                    Layout.fillWidth: true
-                    placeholderText: "Mon,Thu 12:30"
+                    id: timeField
+                    enabled: enabledBox.checked
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 4
+                    Layout.preferredHeight: daysToggle.implicitHeight
+                    horizontalAlignment: Text.AlignHCenter
+                    inputMask: "99:99"
+                    validator: RegularExpressionValidator { regularExpression: /([01][0-9]|2[0-3]):[0-5][0-9]/ }
+                    text: "03:00"
+                    onEditingFinished: page.save()
+                    background: Rectangle {
+                        radius: daysToggle.radius
+                        color: Qt.alpha(Kirigami.Theme.textColor, 0.08)
+                        border.width: timeField.activeFocus ? 1 : 0
+                        border.color: Kirigami.Theme.highlightColor
+                    }
                 }
             }
             Label {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 opacity: 0.7
-                text: "Si l'ordinateur est éteint à l'heure prévue, la routine se lance au démarrage suivant (avec jusqu'à une heure de décalage aléatoire)."
-            }
-        }
-
-        Card {
-            title: "Ce que fait la routine"
-            enabled: enabledBox.checked
-            CheckBox {
-                id: flakeBox
-                text: "Mettre à jour le flake (nix flake update ; flake.lock committé après une application réussie)"
-            }
-            CheckBox {
-                id: flatpakBox
-                text: "Télécharger les mises à jour Flatpak pendant la préparation"
-            }
-            CheckBox {
-                id: notifyBox
-                text: "Notifier quand la routine a trouvé des mises à jour (sinon : icône du tray)"
+                text: "Si l'ordinateur est éteint à l'heure prévue, la routine sera lancée lors de son redémarrage."
             }
         }
 
@@ -143,33 +177,14 @@ ScrollView {
 
         RowLayout {
             Layout.fillWidth: true
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                opacity: 0.7
-                text: page.r.custom ? "Réglages modifiés ici (ils priment sur la configuration NixOS)."
-                                    : "Réglages de la configuration NixOS."
-            }
-            Button {
+            Item { Layout.fillWidth: true }
+            // Seulement quand des réglages faits ici remplacent ceux de la
+            // configuration NixOS.
+            FlatButton {
                 visible: page.r.custom === true
-                text: "Revenir à la configuration"
+                text: "Revenir à la configuration par défaut"
                 icon.name: "edit-undo"
                 onClicked: { page.errorText = ""; backend.resetRoutine(); }
-            }
-            Button {
-                highlighted: true
-                icon.name: "document-save"
-                text: "Enregistrer"
-                onClicked: {
-                    page.errorText = "";
-                    backend.saveRoutine({
-                        enabled: enabledBox.checked,
-                        calendar: page.calendar(),
-                        flakeUpdate: flakeBox.checked,
-                        flatpak: flatpakBox.checked,
-                        notify: notifyBox.checked
-                    });
-                }
             }
         }
     }
