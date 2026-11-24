@@ -189,17 +189,7 @@ void Backend::readPrebuild() {
   m_prebuild = st;
   m_prebuildResult = result;
   emit prebuildChanged();
-  // Fin de la préparation : résultat notifié s'il date d'elle (rien après
-  // un arrêt).
-  if (wasActive && st.isEmpty() && result.value("time").toDouble() >= m_prebuildSince - 5) {
-    const QString state = result.value("state").toString();
-    if (state == "success")
-      notify("object-select-symbolic", "Mise à jour prête",
-             "Préparée en arrière-plan : il ne reste presque plus qu'à l'installer.");
-    else if (state == "failed")
-      notify("dialog-warning-symbolic", "Préparation incomplète",
-             "Une partie n'a pas pu être préparée : la mise à jour la reprendra.");
-  }
+  // Fin de la préparation : notifiée par la routine (moteur), pas ici.
 }
 
 // pending.json, plus flatpaks.json (recherche Flatpak à part) fusionné dedans.
@@ -488,7 +478,10 @@ QString Backend::formatTime(double secs) const {
   if (t.date() == today.addDays(-1)) return "hier à " + t.toString("HH:mm");
   // Cette semaine : le jour seul (« lundi à 12:05 ») ; sinon la date, sans
   // l'année si c'est la même (« le 20 novembre à 12:05 »).
-  if (t.date() > today.addDays(-7)) return fr.toString(t, "dddd 'à' HH:mm");
+  if (t.date() == today.addDays(1)) return "demain à " + t.toString("HH:mm");
+  // À venir dans la semaine (routine) : le jour seul aussi.
+  if (t.date() > today && t.date() < today.addDays(7)) return fr.toString(t, "dddd 'à' HH:mm");
+  if (t.date() < today && t.date() > today.addDays(-7)) return fr.toString(t, "dddd 'à' HH:mm");
   if (t.date().year() == today.year()) return "le " + fr.toString(t, "d MMMM 'à' HH:mm");
   return "le " + fr.toString(t, "d MMMM yyyy 'à' HH:mm");
 }
