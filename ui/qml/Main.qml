@@ -298,7 +298,8 @@ ApplicationWindow {
                 // cartes (la marge de la fenêtre est commune).
                 Layout.rightMargin: Kirigami.Units.largeSpacing * 2 + 1
                 iconName: "view-refresh-symbolic"
-                enabled: !backend.checking("all")
+                // pendingParts lu : liaison réévaluée (checking() est du C++).
+                enabled: backend.pendingParts.length >= 0 && !backend.checking("all")
                 onClicked: backend.refreshPending()
             }
         }

@@ -20,6 +20,12 @@ ScrollView {
     // Toujours « actuelle → disponible » : version du paquet principal de
     // l'entrée quand elle en a une, et date du commit (avec l'heure si c'est
     // le même jour) ; plus le nombre de commits quand GitHub le donne.
+    // backend.checking() est une fonction C++ : appelée seule dans une
+    // liaison, QML ne sait pas quand la réévaluer (le bouton restait actif
+    // pendant la vérification). La lecture de pendingParts l'y oblige.
+    function checking(part) {
+        return backend.pendingParts.length >= 0 && backend.checking(part);
+    }
     function revLabel(input) {
         // Retard de la révision que tu as sur la plus récente, en jours
         // (dates des deux commits).
@@ -139,7 +145,7 @@ ScrollView {
             // aligne aussi les dates d'une carte à l'autre.
             IconAction {
                 iconName: "view-refresh-symbolic"
-                enabled: !window.running && !backend.checking("config")
+                enabled: !window.running && !page.checking("config")
                 onClicked: backend.refreshPart("config")
             }
             ]
@@ -389,7 +395,7 @@ ScrollView {
                 },
                 IconAction {
                     iconName: "view-refresh-symbolic"
-                    enabled: !window.running && !backend.checking("config")
+                    enabled: !window.running && !page.checking("config")
                     onClicked: backend.refreshPart("config")
                 }
             ]
@@ -441,7 +447,7 @@ ScrollView {
                 },
                 IconAction {
                     iconName: "view-refresh-symbolic"
-                    enabled: !window.running && !backend.checking("flake")
+                    enabled: !window.running && !page.checking("flake")
                     onClicked: backend.refreshPart("flake")
                 }
             ]
@@ -513,7 +519,7 @@ ScrollView {
                 },
                 IconAction {
                     iconName: "view-refresh-symbolic"
-                    enabled: !fpCard.busy && !backend.checking("flatpak")
+                    enabled: !fpCard.busy && !page.checking("flatpak")
                     onClicked: backend.refreshPart("flatpak")
                 }
             ]
