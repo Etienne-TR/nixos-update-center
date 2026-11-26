@@ -32,7 +32,9 @@ Frame {
     ColumnLayout {
         anchors.left: parent.left
         anchors.right: parent.right
-        spacing: Kirigami.Units.smallSpacing
+        // Écart titre-contenu porté par le contenu (topMargin), pour qu'il
+        // disparaisse avec lui.
+        spacing: 0
 
         RowLayout {
             Layout.fillWidth: true
@@ -64,9 +66,13 @@ Frame {
         }
         ColumnLayout {
             id: inner
-            // Rien à afficher (section à jour) : pas d'espace vide.
+            // Rien à afficher (section à jour) : pas d'espace vide. La
+            // hauteur suit le contenu : sans ligne visible, elle est nulle
+            // et l'écart sous le titre disparaît aussi ; bodyVisible sert
+            // seulement à masquer un contenu qui serait visible.
             visible: card.bodyVisible
             Layout.fillWidth: true
+            Layout.topMargin: implicitHeight > 0 && card.title.length > 0 ? Kirigami.Units.smallSpacing : 0
             // Pas d'espace entre les lignes : même pas que les listes des
             // autres onglets (la hauteur de ligne suffit).
             spacing: 0

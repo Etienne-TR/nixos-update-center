@@ -397,7 +397,6 @@ ScrollView {
             title: "Mise à jour du flake"
             // Dernière recherche en ligne : dit si la liste est fraîche.
             subtitle: page.upstream.time ? "vérifiée " + window.when(page.upstream.time) : ""
-            bodyVisible: hasOnline || !page.upstream.checked || window.running
             badge: hasOnline ? "●" : (page.upstream.checked ? "✓" : "")
             badgeColor: hasOnline ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
 
@@ -427,7 +426,10 @@ ScrollView {
                     text: "Adopter"
                     visible: !window.running && flakeCard.hasOnline
                     enabled: !backend.prebuildActive
-                    onClicked: backend.checkUpdates()
+                    // Adoption seule (nix flake update) : ni préparation ni
+                    // téléchargement des Flatpaks, dont les actions et la
+                    // recherche qui suit brouilleraient celle-ci.
+                    onClicked: backend.startUpdate(["--flake"])
                 },
                 IconAction {
                     iconName: "view-refresh-symbolic"

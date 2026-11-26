@@ -500,8 +500,8 @@ ApplicationWindow {
                 readonly property bool paused: (modelData.id === "prebuild" && backend.prebuild.paused === true)
                                              || (modelData.id === "flatpak" && backend.flatpakPaused)
                 text: window.stripLabel(modelData)
-                      + (paused ? " · en pause"
-                         : modelData.state === "pending" ? " · en attente"
+                      + (paused ? " · En pause"
+                         : modelData.state === "pending" ? " · En attente"
                          : modelData.detail ? " · " + modelData.detail : "")
                 busy: active && !paused
                 stoppable: active
