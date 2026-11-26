@@ -133,6 +133,14 @@ ScrollView {
                 text: prepCard.resumable ? "Reprendre" : "Préparer"
                 enabled: !window.running
                 onClicked: backend.startPrebuild()
+            },
+            // Son état vient de l'évaluation de la configuration : même
+            // vérification que la carte « Configuration Nix ». La flèche
+            // aligne aussi les dates d'une carte à l'autre.
+            IconAction {
+                iconName: "view-refresh-symbolic"
+                enabled: !window.running && !backend.checking("config")
+                onClicked: backend.refreshPart("config")
             }
             ]
 
