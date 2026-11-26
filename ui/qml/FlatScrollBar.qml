@@ -13,8 +13,10 @@ T.ScrollBar {
     minimumSize: 0.1
     // Masquée quand tout tient à l'écran.
     policy: T.ScrollBar.AsNeeded
-    // Invisible (et sans place réservée par la vue) quand tout tient.
-    visible: size < 1
+    // Invisible (et sans place réservée par la vue) quand tout tient ;
+    // size vaut aussi 0 tant que la vue n'est pas mise en page (ou qu'elle
+    // ne défile pas dans ce sens) : sinon un point restait dans le coin.
+    visible: size > 0 && size < 1
     readonly property real thickness: sb.hovered || sb.pressed ? Kirigami.Units.smallSpacing * 2 : Kirigami.Units.smallSpacing * 1.5
     implicitWidth: Kirigami.Units.smallSpacing * 2 + leftPadding + rightPadding
     implicitHeight: Kirigami.Units.smallSpacing * 2 + topPadding + bottomPadding
