@@ -284,11 +284,13 @@ unchanged() { # installable, génération active
 }
 
 # Comme unchanged, en JSON : true (à appliquer), false, null (évaluation
-# en échec).
+# en échec). Sans écrire flake.lock : une entrée ajoutée à flake.nix et pas
+# encore verrouillée reste une « nouvelle entrée » à adopter (sinon Nix
+# l'ajouterait à flake.lock dès cette évaluation).
 differs() { # installable, génération active, fichier où écrire le chemin évalué
   local out err
   err=$(mktemp)
-  if ! out=$(nix eval --raw "$1.outPath" 2>"$err"); then
+  if ! out=$(nix eval --no-write-lock-file --raw "$1.outPath" 2>"$err"); then
     # Dernière ligne d'erreur de Nix, gardée pour l'interface.
     grep -v '^\s*$' "$err" | tail -n 1 | sed -E 's/^[[:space:]]*(error: )?//' >>"$state/pending-errors.tmp" || true
     rm -f "$err"
@@ -798,7 +800,8 @@ cmd_prebuild() {
   # récupérer une entrée privée du flake (pas de clé SSH). Les .drv obtenus
   # sont ensuite construits ici, sur le store local, en priorité minimale.
   local drvs sys_drv home_drv
-  if drvs=$(as_user nix path-info --derivation \
+  # Sans écrire flake.lock (voir differs).
+  if drvs=$(as_user nix path-info --no-write-lock-file --derivation \
     "$flake#nixosConfigurations.$host.config.system.build.toplevel" \
     "$flake#homeConfigurations.$hmconf.activationPackage"); then
     sys_drv=$(grep -- '-nixos-system-' <<<"$drvs" | head -n 1 || true)
@@ -1052,7 +1055,8 @@ flatpak_updates() {
 # - config système à appliquer : le système évalué diffère de la génération
 #   active (changement de la config ou du flake.lock déjà committé) ;
 # - config Home Manager à appliquer : idem pour Home Manager ;
-# - nouvelles versions proposées par le flake : nix flake update à blanc
+# - nouvelles versions proposées par le flake, et entrées ajoutées à
+#   flake.nix pas encore dans flake.lock : nix flake update à blanc
 #   (--output-lock-file, flake.lock inchangé).
 # Plus le détail : commits et fichiers modifiés depuis la dernière
 # application, entrées du flake.lock changées, paquets qui changent (nvd, si
@@ -1197,9 +1201,11 @@ cmd_pending() {
   if [ -n "$pending_quick" ]; then
     # Seulement celles que flake.lock n'a pas fait avancer depuis la
     # recherche complète (une entrée mise à jour seule a pu prendre une
-    # révision encore plus récente : la prochaine recherche le dira).
+    # révision encore plus récente : la prochaine recherche le dira), et
+    # les nouvelles entrées toujours absentes de flake.lock.
     upstream=$(jq -c --slurpfile l "$cur" '($l[0]) as $L
-      | [.upstream.inputs[]? | select(.from.rev == ($L.nodes[$L.nodes.root.inputs[.name] // ""].locked.rev // ""))]' \
+      | [.upstream.inputs[]? | select(if .from == null then $L.nodes.root.inputs[.name] == null
+          else .from.rev == ($L.nodes[$L.nodes.root.inputs[.name] // ""].locked.rev // "") end)]' \
       "$prev" 2>/dev/null || echo "[]")
     upstream_ok=$(jq -c '.upstream.checked // false' "$prev" 2>/dev/null || echo false)
     upstream_time=$(jq -c '.upstream.time // 0' "$prev" 2>/dev/null || echo 0)
