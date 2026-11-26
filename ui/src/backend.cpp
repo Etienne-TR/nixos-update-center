@@ -469,11 +469,13 @@ void Backend::runPending(const QStringList &args) {
   p->start(m_engine, QStringList{"pending"} + args);
 }
 
-// Recherche complète : deux actions indépendantes, Nix et Flatpak, en
-// parallèle.
+// Recherche complète : trois actions indépendantes en parallèle, chacune
+// avec son bandeau : configuration Nix, flake (quelques secondes, sans
+// attendre la première) et Flatpak.
 void Backend::refreshPending(bool quick) {
   if (quick) return runPending({"--quick"});
-  runPending({"--only", "nix"});
+  runPending({"--only", "config"});
+  runPending({"--only", "flake"});
   runPending({"--only", "flatpak"});
 }
 

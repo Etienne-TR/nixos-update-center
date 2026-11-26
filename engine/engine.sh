@@ -1027,6 +1027,50 @@ flatpak_updates() {
 # application ; « à appliquer » déduit de git, sans évaluation. Nouvelles
 # versions en ligne et Flatpaks : ceux de la dernière
 # vérification complète.
+# Nouvelles versions et nouvelles entrées du flake : nix flake update à
+# blanc (flake.lock inchangé). Code 1 si la recherche échoue (réseau).
+flake_upstream() { # flake.lock, dossier temporaire
+  local up
+  echo "Recherche des nouvelles versions des entrées du flake (nix flake update à blanc)…" >&2
+  (cd "$flake" && nix flake update --output-lock-file "$2/new.lock" >/dev/null 2>&1) || return 1
+  up=$(lock_diff "$1" "$2/new.lock")
+  echo "  $(count "$(jq length <<<"$up")" "nouvelle version en ligne" "nouvelles versions en ligne")" >&2
+  echo "$up"
+}
+
+# Résultat de la dernière recherche du flake, gardé tant qu'il vaut :
+# seulement les entrées que flake.lock n'a pas fait avancer depuis (une
+# entrée mise à jour seule a pu prendre une révision encore plus récente :
+# la prochaine recherche le dira), et les nouvelles entrées toujours
+# absentes de flake.lock.
+upstream_kept() { # pending.json, flake.lock
+  jq -c --slurpfile l "$2" '($l[0]) as $L
+    | [.upstream.inputs[]? | select(if .from == null then $L.nodes.root.inputs[.name] == null
+        else .from.rev == ($L.nodes[$L.nodes.root.inputs[.name] // ""].locked.rev // "") end)]' \
+    "$1" 2>/dev/null || echo "[]"
+}
+
+# Recherche du flake seule (--only flake) : sans le verrou des autres
+# vérifications, pour tourner à côté de celle de la configuration ; ne
+# réécrit que upstream dans pending.json.
+pending_flake_only() {
+  local tmp up file="$state/pending.json"
+  mkdir -p "$state"
+  tmp=$(mktemp -d)
+  if up=$(flake_upstream "$flake/flake.lock" "$tmp"); then
+    exec 9>"$state/pending-write.lock"
+    flock 9
+    { [ -s "$file" ] && cat "$file" || echo '{}'; } |
+      jq --argjson up "$up" --argjson t "$(now)" '.upstream = {checked: true, inputs: $up, time: $t}' |
+      tee "$file.tmp"
+    mv -f "$file.tmp" "$file"
+  else
+    echo "  recherche impossible (réseau ?)" >&2
+    cat "$file" 2>/dev/null || echo '{}'
+  fi
+  rm -rf "$tmp"
+}
+
 pending_quick=""
 cmd_pending() {
   # Ce qui est vérifié : tout (défaut), rien d'autre que git (--quick), ou
@@ -1036,6 +1080,12 @@ cmd_pending() {
   # Flatpaks seuls : sans le verrou de pending.json.
   if [ "${1:-}" = --only ] && [ "${2:-}" = flatpak ]; then
     cmd_flatpak_pending
+    return
+  fi
+  # Flake seul : en parallèle d'une vérification de la configuration (sans
+  # son verrou) ; seule la partie upstream de pending.json est réécrite.
+  if [ "${1:-}" = --only ] && [ "${2:-}" = flake ]; then
+    pending_flake_only
     return
   fi
   case "${1:-}" in
@@ -1158,25 +1208,12 @@ cmd_pending() {
     sys_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$sys_changes")
   [ -n "$home_evaluated" ] ||
     home_changed=$(jq --argjson f "$fl" '(.commits | length) + (.dirty | length) + (.inputs | length) + $f > 0' <<<"$home_changes")
-  if [ -n "$pending_quick" ]; then
-    # Seulement celles que flake.lock n'a pas fait avancer depuis la
-    # recherche complète (une entrée mise à jour seule a pu prendre une
-    # révision encore plus récente : la prochaine recherche le dira), et
-    # les nouvelles entrées toujours absentes de flake.lock.
-    upstream=$(jq -c --slurpfile l "$cur" '($l[0]) as $L
-      | [.upstream.inputs[]? | select(if .from == null then $L.nodes.root.inputs[.name] == null
-          else .from.rev == ($L.nodes[$L.nodes.root.inputs[.name] // ""].locked.rev // "") end)]' \
-      "$prev" 2>/dev/null || echo "[]")
-    upstream_ok=$(jq -c '.upstream.checked // false' "$prev" 2>/dev/null || echo false)
-    upstream_time=$(jq -c '.upstream.time // 0' "$prev" 2>/dev/null || echo 0)
-  fi
-
   # 3 : nouvelles versions proposées par le flake, sans toucher flake.lock.
-  [ -z "$do_flake" ] || echo "Recherche des nouvelles versions des entrées du flake (nix flake update à blanc)…" >&2
-  if [ -n "$do_flake" ] && (cd "$flake" && nix flake update --output-lock-file "$tmp/new.lock" >/dev/null 2>&1); then
-    upstream=$(lock_diff "$cur" "$tmp/new.lock")
-    upstream_ok=true upstream_time=$(now)
-    echo "  $(count "$(jq length <<<"$upstream")" "nouvelle version en ligne" "nouvelles versions en ligne")" >&2
+  # Sans elle : reprises de pending.json au moment de l'écrire (une
+  # recherche du flake a pu finir entre-temps, en parallèle).
+  local upstream_fresh=""
+  if [ -n "$do_flake" ] && upstream=$(flake_upstream "$cur" "$tmp"); then
+    upstream_ok=true upstream_time=$(now) upstream_fresh=1
   fi
 
   # Flatpaks : aussi toutes les 5 minutes avec la vérification rapide
@@ -1206,9 +1243,21 @@ cmd_pending() {
     [ -e "$flake/$f" ] && printf '%s\t%s\n' "$f" "$(stat -c %Y "$flake/$f")"
   done | jq -R 'split("\t") | {key: .[0], value: (.[1] | tonumber)}' | jq -s 'from_entries')
 
+  # Écriture de pending.json : une à la fois (recherche du flake en
+  # parallèle).
+  exec 9>"$state/pending-write.lock"
+  flock 9
+  if [ -z "$upstream_fresh" ] && [ -n "$pending_quick" ]; then
+    upstream=$(upstream_kept "$state/pending.json" "$cur")
+    upstream_ok=$(jq -c '.upstream.checked // false' "$state/pending.json" 2>/dev/null || echo false)
+    upstream_time=$(jq -c '.upstream.time // 0' "$state/pending.json" 2>/dev/null || echo 0)
+    # pending.json absent ou vide : jq ne sort rien.
+    upstream=${upstream:-[]} upstream_ok=${upstream_ok:-false} upstream_time=${upstream_time:-0}
+  fi
   local full_time
   full_time=$(now)
   [ -z "$pending_quick" ] || [ -n "${full_nix:-}" ] || full_time=$(jq '.time // 0' "$prev" 2>/dev/null || echo 0)
+  full_time=${full_time:-0}
   jq -n --argjson time "$full_time" --argjson quickTime "$(now)" \
     --argjson quick "$([ -n "$pending_quick" ] && echo true || echo false)" \
     --argjson sysc "$sys_changed" --argjson homec "$home_changed" \
@@ -1230,7 +1279,10 @@ cmd_pending() {
       unpushed: $unpushed,
       uncommitted: $uncommitted, uncommittedTimes: $uncommittedTimes, errors: $errors }' |
     tee "$state/pending.json.tmp"
-  mv -f "$state/pending.json.tmp" "$state/pending.json"
+  # Assemblage en échec : l'ancien pending.json reste (pas de fichier vide).
+  if [ -s "$state/pending.json.tmp" ]; then
+    mv -f "$state/pending.json.tmp" "$state/pending.json"
+  fi
   rm -rf "$tmp"
 }
 

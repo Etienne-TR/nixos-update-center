@@ -88,7 +88,7 @@ class Backend : public QObject {
     if (m_pendingParts.contains(part) || m_pendingParts.contains("all")) return true;
     // « nix » couvre la config et le flake ; « all » : la recherche complète
     // (les deux, Nix et Flatpak).
-    if (part == "all") return m_pendingParts.contains("nix") || m_pendingParts.contains("flatpak");
+    if (part == "all") return !m_pendingParts.isEmpty() && m_pendingParts != QStringList{"quick"};
     if (part != "flatpak" && m_pendingParts.contains("nix")) return true;
     return part == "config" && (m_pendingParts.contains("system") || m_pendingParts.contains("home"));
   }
