@@ -1,6 +1,7 @@
 #include "backend.h"
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -444,13 +445,26 @@ void Backend::runPending(const QStringList &args) {
     });
   }
   m_checkProcs.insert(key, p);
-  connect(p, &QProcess::finished, this, [this, p, key] {
+  QElapsedTimer started;
+  started.start();
+  connect(p, &QProcess::finished, this, [this, p, key, started] {
     p->deleteLater();
     m_checkProcs.remove(key);
-    m_pendingParts.removeOne(key);
     m_pendingMtime = QDateTime();
     readPending();
-    emit pendingChanged();
+    // Résultat affiché tout de suite ; le bandeau de la recherche reste au
+    // moins 1,5 s, pour qu'une recherche rapide (flake : ~1 s) se voie.
+    const qint64 left = (key == "quick" ? 0 : 1500) - started.elapsed();
+    const auto done = [this, key] {
+      m_pendingParts.removeOne(key);
+      emit pendingChanged();
+    };
+    if (left > 0) {
+      emit pendingChanged();
+      QTimer::singleShot(left, this, done);
+    } else {
+      done();
+    }
   });
   p->start(m_engine, QStringList{"pending"} + args);
 }
