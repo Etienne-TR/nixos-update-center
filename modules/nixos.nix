@@ -42,7 +42,6 @@ let
         inherit (p) attr patch marker;
       }) (lib.filterAttrs (_: p: p.enable) cfg.extras.patchedPackages);
       voxtype = cfg.extras.voxtype.enable;
-      claudeDesktop = { inherit (cfg.extras.claudeDesktop) enable packageFile; };
     };
   };
 
@@ -201,15 +200,6 @@ in
       };
 
       voxtype.enable = lib.mkEnableOption "le téléchargement des modèles Voxtype avant le switch Home Manager, avec avancement";
-
-      claudeDesktop = {
-        enable = lib.mkEnableOption "la vérification d'une nouvelle version de Claude Desktop (écrite et committée avant le switch Home Manager)";
-        packageFile = lib.mkOption {
-          type = lib.types.str;
-          default = "";
-          description = "Fichier du paquet (relatif au flake), avec `  version = \"…\";` et `sha256 = \"…\";`.";
-        };
-      };
     };
   };
 

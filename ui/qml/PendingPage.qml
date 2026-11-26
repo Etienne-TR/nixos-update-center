@@ -511,24 +511,5 @@ ScrollView {
             ]
         }
 
-        Card {
-            visible: !!page.pending.claudeDesktop
-            title: "Claude Desktop"
-            Label {
-                property var c: page.pending.claudeDesktop || {}
-                text: c.available ? "Version " + c.latest + " disponible (configurée : " + c.configured + "), écrite dans la config par « Appliquer » (Home Manager)."
-                                  : "À jour (" + c.configured + ")."
-            }
-            actions: [
-                FlatButton {
-                    icon.name: "media-playback-start-symbolic"
-                    text: "Mettre à jour"
-                    enabled: !window.running && (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available))
-                    visible: (!!(page.pending.claudeDesktop && page.pending.claudeDesktop.available)) && !window.running
-                    onClicked: backend.startUpdate(["--home"])
-                }
-            ]
-        }
-
     }
 }

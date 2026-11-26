@@ -24,7 +24,7 @@ Home Manager autonome et Flatpak (installation user).
 - **Interface** (module Home Manager) : icône dans le tray (anneau
   d'avancement, détail au survol, menu) et fenêtre QML au style KDE, qui suit
   kdeglobals. Onglets : en attente (entrées du flake, paquets qui changent
-  avec nvd, Flatpaks, Claude Desktop, commits non envoyés, préparation avec
+  avec nvd, Flatpaks, commits non envoyés, préparation avec
   « Pleine vitesse » et « Arrêter »), en cours (parties, étape, avancement,
   journal), historique (exécutions et leurs journaux, générations avec retour
   arrière, nouveautés Home Manager). app_id `nixos-update-center`, pour une
@@ -81,8 +81,6 @@ Un extra ne bloque jamais la mise à jour.
   paquet d'origine en le lisant.
 - `extras.voxtype.enable` : modèles de dictée Voxtype téléchargés avant le
   switch Home Manager, avec avancement.
-- `extras.claudeDesktop = { enable; packageFile; }` : nouvelle version de
-  Claude Desktop écrite dans `packageFile` et committée avant le switch.
 
 ## Sous-commandes du moteur
 

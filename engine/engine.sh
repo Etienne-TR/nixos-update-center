@@ -386,51 +386,11 @@ voxtype_models() {
   rm -rf "$tmp"
 }
 
-# Extra Claude Desktop : version publiée plus récente que celle de la
-# configuration ? (index apt d'Anthropic). Sortie : « config publiée sha256 ».
-claude_index="https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages"
-claude_check() {
-  local file index latest sha current
-  file="$flake/$(cfg .extras.claudeDesktop.packageFile)"
-  current=$(awk -F'"' '/^  version = / { print $2; exit }' "$file")
-  index=$(curl -fsS --max-time 20 --retry 3 --retry-delay 5 --retry-all-errors \
-    -H 'Cache-Control: no-cache' "$claude_index?t=$(now)") || return 2
-  latest=$(awk '/^Version:/ { print $2 }' <<<"$index" | sort -V | tail -n 1)
-  sha=$(awk -v v="$latest" '/^Version:/ { ok = ($2 == v) } ok && /^SHA256:/ { print $2; exit }' <<<"$index")
-  [ -n "$latest" ] && [ -n "$sha" ] && [ -n "$current" ] || return 2
-  echo "$current $latest $sha"
-  [ "$latest" != "$current" ] &&
-    [ "$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n 1)" = "$latest" ]
-}
-
-claude_update() {
-  local out rc=0 current latest sha file
-  out=$(claude_check) || rc=$?
-  read -r current latest sha <<<"$out"
-  case "$rc" in
-    0) ;;
-    1) echo "Claude Desktop à jour ($current)." && return 0 ;;
-    *) echo "Vérification de Claude Desktop impossible." && return 1 ;;
-  esac
-  file=$(cfg .extras.claudeDesktop.packageFile)
-  sed -i \
-    -e "s/^  version = \"$current\";/  version = \"$latest\";/" \
-    -e "s/sha256 = \"[0-9a-f]\{64\}\";/sha256 = \"$sha\";/" \
-    "$flake/$file" || return 1
-  git commit -q -m "chore(claude-desktop): $current -> $latest" -- "$file" || return 1
-  echo "Claude Desktop $current -> $latest : écrit dans la configuration et committé."
-  notes+=("Claude Desktop $latest : relancer l'app")
-}
-
 news_count=0
 part_home() {
   local old_ids new
   find "$HOME/.config" -name "*.home-manager-backup" -type f -delete 2>/dev/null || true
   find "$HOME" -maxdepth 1 -name "*.home-manager-backup" -type f -delete
-  if [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
-    step "Vérification de Claude Desktop"
-    claude_update || echo "Claude Desktop : en échec, switch fait quand même."
-  fi
   old_ids=$(jq -r '.entries[].id' "$news_installed" 2>/dev/null || true)
   [ "$(cfg .extras.voxtype)" != true ] || voxtype_models
   step "Évaluation de Home Manager"
@@ -1060,35 +1020,35 @@ flatpak_updates() {
 #   (--output-lock-file, flake.lock inchangé).
 # Plus le détail : commits et fichiers modifiés depuis la dernière
 # application, entrées du flake.lock changées, paquets qui changent (nvd, si
-# la préparation a construit), Flatpaks, Claude Desktop, commits non envoyés.
+# la préparation a construit), Flatpaks, commits non envoyés.
 # Écrit pending.json et l'affiche.
 # --quick : seulement git et les fichiers locaux (moins d'une seconde) :
 # commits, fichiers modifiés et entrées du flake.lock depuis la dernière
 # application ; « à appliquer » déduit de git, sans évaluation. Nouvelles
-# versions en ligne, Flatpaks et Claude Desktop : ceux de la dernière
+# versions en ligne et Flatpaks : ceux de la dernière
 # vérification complète.
 pending_quick=""
 cmd_pending() {
   # Ce qui est vérifié : tout (défaut), rien d'autre que git (--quick), ou
   # une seule partie (--only system|home|config|flake|flatpak ; config : les deux premières) ; le reste est
   # repris de la dernière vérification.
-  local do_sys=1 do_home=1 do_flake=1 do_flatpak=1 do_claude=1 full_nix=""
+  local do_sys=1 do_home=1 do_flake=1 do_flatpak=1 full_nix=""
   # Flatpaks seuls : sans le verrou de pending.json.
   if [ "${1:-}" = --only ] && [ "${2:-}" = flatpak ]; then
     cmd_flatpak_pending
     return
   fi
   case "${1:-}" in
-    --quick) pending_quick=1 do_sys="" do_home="" do_flake="" do_flatpak="" do_claude="" ;;
+    --quick) pending_quick=1 do_sys="" do_home="" do_flake="" do_flatpak="" ;;
     --only)
-      pending_quick=1 do_sys="" do_home="" do_flake="" do_flatpak="" do_claude=""
+      pending_quick=1 do_sys="" do_home="" do_flake="" do_flatpak=""
       case "${2:-}" in
         system) do_sys=1 ;;
-        home) do_home=1 do_claude=1 ;;
-        config) do_sys=1 do_home=1 do_claude=1 ;;
+        home) do_home=1 ;;
+        config) do_sys=1 do_home=1 ;;
         # Tout Nix (config et flake), sans Flatpak : la recherche complète
         # de l'interface lance « nix » et « flatpak » en parallèle.
-        nix) do_sys=1 do_home=1 do_flake=1 do_claude=1 full_nix=1 ;;
+        nix) do_sys=1 do_home=1 do_flake=1 full_nix=1 ;;
         flake) do_flake=1 ;;
         flatpak) do_flatpak=1 ;;
         *) die "partie inconnue : ${2:-} (system, home, config, nix, flake, flatpak)" ;;
@@ -1106,7 +1066,7 @@ cmd_pending() {
   local built_sys built_home
   # Vérifiée souvent : rattrape aussi une exécution interrompue.
   recover_interrupted
-  local claude="null" unpushed="[]" out rc
+  local unpushed="[]"
   mkdir -p "$state"
   tmp=$(mktemp -d)
   repo=$(git -C "$flake" rev-parse --show-toplevel)
@@ -1209,7 +1169,6 @@ cmd_pending() {
       "$prev" 2>/dev/null || echo "[]")
     upstream_ok=$(jq -c '.upstream.checked // false' "$prev" 2>/dev/null || echo false)
     upstream_time=$(jq -c '.upstream.time // 0' "$prev" 2>/dev/null || echo 0)
-    claude=$(jq -c '.claudeDesktop // null' "$prev" 2>/dev/null || echo null)
   fi
 
   # 3 : nouvelles versions proposées par le flake, sans toucher flake.lock.
@@ -1234,15 +1193,6 @@ cmd_pending() {
     (exec 8>&-; cmd_flatpak_pending) >/dev/null 2>&1 &
   fi
 
-  if [ -n "$do_claude" ] && [ "$(cfg .extras.claudeDesktop.enable)" = true ]; then
-    rc=0
-    out=$(claude_check) || rc=$?
-    if [ "$rc" -le 1 ]; then
-      read -r c_cur c_latest _ <<<"$out"
-      claude=$(jq -n --arg c "$c_cur" --arg l "$c_latest" --argjson a "$([ "$rc" -eq 0 ] && echo true || echo false)" \
-        '{configured: $c, latest: $l, available: $a}')
-    fi
-  fi
 
   unpushed=$(git -C "$repo" log --format='%h%x09%s' '@{u}..' 2>/dev/null |
     jq -R 'split("\t") | {hash: .[0], subject: .[1]}' | jq -s .)
@@ -1267,7 +1217,7 @@ cmd_pending() {
     --arg tsys "$target_sys" --arg thome "$target_home" --arg head "$head" --arg dirty "$dirty_hash" \
     --arg sysb "$built_sys" --arg homeb "$built_home" \
     --argjson upstream "$upstream" --argjson uptime "$upstream_time" --argjson upok "$upstream_ok" \
-    --argjson claude "$claude" --argjson unpushed "$unpushed" --argjson uncommitted "$uncommitted" --argjson uncommittedTimes "$uncommitted_times" \
+    --argjson unpushed "$unpushed" --argjson uncommitted "$uncommitted" --argjson uncommittedTimes "$uncommitted_times" \
     --argjson errors "$(jq -R . "$state/pending-errors.tmp" 2>/dev/null | jq -s .)" '
     { time: $time, quickTime: $quickTime, quick: $quick, head: $head, dirtyHash: $dirty,
       apply: {
@@ -1277,7 +1227,7 @@ cmd_pending() {
         home: ({changed: $homec, built: ($homeb != "" and $homeb == $thome), target: $thome, packages: $pkghome} + $homech),
         flake: ($flakech | {commits, dirty}) },
       upstream: {checked: $upok, inputs: $upstream, time: $uptime},
-      claudeDesktop: $claude, unpushed: $unpushed,
+      unpushed: $unpushed,
       uncommitted: $uncommitted, uncommittedTimes: $uncommittedTimes, errors: $errors }' |
     tee "$state/pending.json.tmp"
   mv -f "$state/pending.json.tmp" "$state/pending.json"

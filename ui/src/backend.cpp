@@ -207,7 +207,7 @@ void Backend::readPending() {
 }
 
 // Éléments en attente : parties dont la config est à appliquer, nouvelles
-// versions du flake, Flatpaks, Claude Desktop.
+// versions du flake, Flatpaks.
 int Backend::pendingCount() const {
   const QVariantMap apply = m_pending.value("apply").toMap();
   int n = 0;
@@ -218,7 +218,6 @@ int Backend::pendingCount() const {
   if (n == 0 && (!sys.value("inputs").toList().isEmpty() || !home.value("inputs").toList().isEmpty())) ++n;
   n += m_pending.value("upstream").toMap().value("inputs").toList().size();
   n += m_pending.value("flatpaks").toList().size();
-  if (m_pending.value("claudeDesktop").toMap().value("available").toBool()) ++n;
   return n;
 }
 
