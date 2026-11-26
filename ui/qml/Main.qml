@@ -511,13 +511,15 @@ ApplicationWindow {
             }
         }
         Repeater {
-            // Recherches : Nix (une à la fois affichée) et Flatpak.
-            model: (window.checking ? [{ id: "check:" + window.nixChecks[0], title:
+            // Recherches : un bandeau par recherche Nix en cours (une
+            // seconde attend la fin de la première, mais se voit), plus
+            // Flatpak.
+            model: window.nixChecks.map(k => ({ id: "check:" + k, title:
                         // Le nom de la carte concernée, pour s'y retrouver.
                         ({ system: "Vérification : Configuration Nix (système)", home: "Vérification : Configuration Nix (utilisateur)",
                            config: "Vérification : Configuration Nix", flake: "Recherche : Mise à jour du flake",
-                           nix: "Recherche : Configuration Nix et Mise à jour du flake" }[window.nixChecks[0]]
-                         || "Recherche : Configuration Nix et Mise à jour du flake") }] : [])
+                           nix: "Recherche : Configuration Nix et Mise à jour du flake" }[k]
+                         || "Recherche : Configuration Nix et Mise à jour du flake") }))
                    .concat(backend.pendingParts.includes("flatpak") ? [{ id: "check:flatpak", title: "Recherche : Flatpaks" }] : [])
             StatusStrip {
                 required property var modelData
