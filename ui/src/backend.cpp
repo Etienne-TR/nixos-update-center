@@ -285,6 +285,11 @@ void Backend::updateSummary() {
 }
 
 void Backend::startUpdate(const QStringList &parts) {
+  // Une vérification Nix en cours évaluerait la même config que la mise à
+  // jour, en parallèle et pour rien (elle est refaite à la fin) : arrêtée.
+  // Celle des Flatpaks (indépendante) et la rapide (git) continuent.
+  for (const QString &part : m_checkProcs.keys())
+    if (part != "flatpak" && part != "quick") stopCheck(part);
   QProcess::startDetached(QStringLiteral(APP_NAME), QStringList{"--background"} + parts);
   emit runStarted();
 }
